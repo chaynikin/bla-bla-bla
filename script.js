@@ -1,12 +1,12 @@
 // ===== Edit your links and email here =====
 const CONFIG = {
-  email: "hello@example.com",
+  email: "dlukin@yuman.ru",
   links: [
-    { id: "tiktok",    label: "TikTok",    url: "https://www.tiktok.com/@your_username" },
-    { id: "instagram", label: "Instagram", url: "https://www.instagram.com/your_username" },
-    { id: "github",    label: "GitHub",    url: "https://github.com/your_username" },
-    { id: "vk",        label: "VK",        url: "https://vk.com/your_username" },
-    { id: "telegram",  label: "Telegram",  url: "https://t.me/your_username" },
+    { id: "tiktok",    label: "TikTok",    url: "https://www.tiktok.com/chaynikin" },
+    { id: "instagram", label: "Instagram", url: "https://www.instagram.com/chaynikin.d?cplk=MWZ4cWIydnRmcGk1aQ==" },
+    { id: "github",    label: "GitHub",    url: "https://github.com/chaynikin" },
+    { id: "vk",        label: "VK",        url: "https://vk.com/chaynikin" },
+    { id: "telegram",  label: "Telegram",  url: "https://t.me/chaynikin" },
   ],
 };
 // ==========================================
