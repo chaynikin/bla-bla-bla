@@ -6,9 +6,10 @@
   <title>Chocolate</title>
   <meta name="description" content="A rotatable chocolate bar and my links." />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍫</text></svg>" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=4" />
 </head>
 <body>
+  <canvas id="bg" aria-hidden="true"></canvas>
   <main>
     <header class="intro">
       <h1>Sweet Links</h1>
@@ -67,7 +68,9 @@
     </form>
   </dialog>
 
-  <script src="icons.js"></script>
-  <script src="script.js"></script>
+  <script src="icons.js?v=4"></script>
+  <script src="script.js?v=4"></script>
+  <!-- separate module: if WebGL or the module fails, the links still work -->
+  <script type="module" src="background.js?v=4"></script>
 </body>
 </html>

@@ -24,7 +24,33 @@ body {
   overflow-x: hidden;
 }
 
+/* WebGL background; fades in over the CSS gradient once the first frame renders */
+#bg {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  display: block;
+  opacity: 0;
+  transition: opacity 1.2s ease;
+  pointer-events: none;
+}
+#bg.ready { opacity: 1; }
+
+/* vignette keeps the bar the brightest thing on screen */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 50%, transparent 35%, rgba(8, 3, 1, 0.55) 100%);
+}
+
 main {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
