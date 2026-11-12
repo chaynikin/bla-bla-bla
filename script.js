@@ -46,7 +46,8 @@ function pixelIcon(path, grid = ICON_GRID) {
     }
     // privacy modes can blank or fill canvas reads; use the smooth icon then
     if (on < grid * grid * 0.05 || on > grid * grid * 0.9) throw new Error("unreadable canvas");
-    return `<svg viewBox="0 0 ${grid} ${grid}" width="${size}" height="${size}" aria-hidden="true"><path d="${d}"/></svg>`;
+    // crispEdges: no anti-aliasing, so no hairline seams between pixel rows
+    return `<svg viewBox="0 0 ${grid} ${grid}" width="${size}" height="${size}" shape-rendering="crispEdges" aria-hidden="true"><path d="${d}"/></svg>`;
   } catch (err) {
     return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><path d="${path}"/></svg>`;
   }
@@ -165,7 +166,8 @@ const tiles = linkItems.map((item, i) => {
     `--col:${c};--row:${r};` +
     `--o-tl:${+(top && left)};--o-tr:${+(top && right)};--o-br:${+(bottom && right)};--o-bl:${+(bottom && left)}`;
   a.innerHTML =
-    `<span class="tf">${pixelIcon(item.path)}</span><span class="tb"></span>` +
+    // back first: if a browser ever draws the tile flat, the front still ends up on top
+    `<span class="tb"></span><span class="tf">${pixelIcon(item.path)}</span>` +
     ["l", "r", "t", "b"].map((s) => `<span class="te ${s}"></span>`).join("");
   bar.appendChild(a);
 
