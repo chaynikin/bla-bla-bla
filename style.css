@@ -1,3 +1,12 @@
+/* heading font: Playfair Display, SIL Open Font License (fonts/OFL.txt) */
+@font-face {
+  font-family: "Playfair Display";
+  src: url("fonts/playfair-display-latin-600-italic.woff2") format("woff2");
+  font-weight: 600;
+  font-style: italic;
+  font-display: swap;
+}
+
 :root {
   --w: 252px;
   --h: 472px;
@@ -62,7 +71,12 @@ main {
 
 h1 {
   margin: 0;
+  /* room for the italic overhang, which background-clip: text would cut off */
+  padding: 0 0.12em;
   text-align: center;
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-weight: 600;
   font-size: clamp(2rem, 6vw, 3.2rem);
   letter-spacing: 0.02em;
   background: linear-gradient(180deg, #f0d4ad, #a8693e);
