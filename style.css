@@ -152,7 +152,7 @@ h1.px .title-text {
 }
 .stage.broken .shadow { transform: scaleX(1.3); }
 
-/* the wrappers sit in the z=0 plane; when tilted, they'd cover parts of the
+/* these containers sit in the z=0 plane; when tilted, they'd cover parts of the
    faces and swallow taps, so only the faces receive pointers */
 .scaler { transform-style: preserve-3d; pointer-events: none; }
 
