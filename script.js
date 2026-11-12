@@ -50,10 +50,65 @@ for (let i = 0; i < 18; i++) {
     });
   }
   a.innerHTML =
-    `<span class="mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${item.path}"/></svg>` +
-    `<span class="label">${item.label}</span></span>`;
+    `<span class="mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${item.path}"/></svg></span>`;
   pieces.appendChild(a);
 }
+
+// --- wrapper details: guilloché, foil crimp, barcode ---
+(function drawWrapper() {
+  const NS = "http://www.w3.org/2000/svg";
+  const svgPath = (parent, d, attrs = {}) => {
+    const p = document.createElementNS(NS, "path");
+    p.setAttribute("d", d);
+    for (const [k, v] of Object.entries(attrs)) p.setAttribute(k, v);
+    document.getElementById(parent).appendChild(p);
+  };
+  const f = (n) => n.toFixed(2);
+
+  // rosette: interleaved sine rings around the emblem
+  for (let k = 0; k < 14; k++) {
+    let d = "";
+    for (let i = 0; i <= 720; i++) {
+      const t = (i / 720) * Math.PI * 2;
+      const r = 59 + 10 * Math.sin(16 * t + (k * Math.PI) / 7) + 2 * Math.sin(48 * t + k);
+      d += `${i ? "L" : "M"}${f(126 + r * Math.cos(t))} ${f(158 + r * Math.sin(t))}`;
+    }
+    svgPath("rosette", d + "Z");
+  }
+
+  // wave band
+  for (let k = 0; k < 12; k++) {
+    let d = "";
+    for (let x = 18; x <= 234; x += 1.5) {
+      const y = 385 + 9 * Math.sin(x * 0.085 + (k * Math.PI) / 6) * Math.cos(x * 0.018 - 0.4);
+      d += `${x === 18 ? "M" : "L"}${f(x)} ${f(y)}`;
+    }
+    svgPath("waves", d);
+  }
+
+  // foil: crimped strip with a pinked bottom edge
+  let foil = "M0 0H252V31";
+  for (let x = 252; x > 0; x -= 4) foil += `L${x - 2} 35L${x - 4} 31`;
+  document.getElementById("foilShape").setAttribute("d", foil + "Z");
+  for (let x = 1; x < 252; x += 2.5) {
+    svgPath("foilCrimp", `M${f(x)} 0V${x % 5 < 2.5 ? 31 : 33}`, {
+      stroke: x % 5 < 2.5 ? "#000" : "#fff",
+      "stroke-width": ".6",
+      opacity: x % 5 < 2.5 ? ".14" : ".22",
+    });
+  }
+
+  // barcode (deterministic widths)
+  let seed = 7;
+  let x = 50;
+  while (x < 104) {
+    seed = (seed * 9301 + 49297) % 233280;
+    const w = 0.5 + (seed % 3) * 0.5;
+    const guard = x < 52 || x > 101 || Math.abs(x - 77) < 1.5;
+    svgPath("barcode", `M${f(x)} 410h${w}v${guard ? 22 : 19}h-${w}z`);
+    x += w + 0.6 + ((seed >> 3) % 3) * 0.45;
+  }
+})();
 
 // --- email dialog ---
 const form = document.getElementById("emailForm");

@@ -4,6 +4,10 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { Pass, FullScreenQuad } from "three/examples/jsm/postprocessing/Pass.js";
+import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 
 const canvas = document.getElementById("bg");
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -20,30 +24,33 @@ try {
 }
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, small ? 1.5 : 1.75));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+renderer.toneMappingExposure = 0.78;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-const BG = new THREE.Color("#1a0c06");
+const BG = new THREE.Color("#0a0402");
 const scene = new THREE.Scene();
-scene.background = BG;
-scene.fog = new THREE.FogExp2(BG, 0.034);
+// no scene.background: the depth-of-field pass would read it as near depth;
+// the colour is the RenderPass clear colour instead
+const fxScene = new THREE.Scene(); // dust, drawn after the blur (it defocuses itself)
+scene.fog = new THREE.FogExp2(BG, 0.04);
 
 const pmrem = new THREE.PMREMGenerator(renderer);
-scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-scene.environmentIntensity = 0.45;
+const envTex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environment = envTex;
+scene.environmentIntensity = 0.3;
 
 const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
 camera.position.set(0, 0.6, 14);
 
 // ---------- lights ----------
-scene.add(new THREE.HemisphereLight("#ffd9b0", "#2a1208", 0.55));
-const key = new THREE.DirectionalLight("#ffd2a1", 2.6);
+scene.add(new THREE.HemisphereLight("#ffd9b0", "#1a0a04", 0.32));
+const key = new THREE.DirectionalLight("#ffd2a1", 1.9);
 key.position.set(6, 10, 8);
 scene.add(key);
-const rim = new THREE.DirectionalLight("#ff7a2e", 2.2);
+const rim = new THREE.DirectionalLight("#ff7a2e", 1.7);
 rim.position.set(-8, 3, -10);
 scene.add(rim);
-const glowLight = new THREE.PointLight("#ff9a4a", 60, 40, 1.6);
+const glowLight = new THREE.PointLight("#ff9a4a", 38, 40, 1.6);
 glowLight.position.set(0, 1, -2);
 scene.add(glowLight);
 
@@ -62,7 +69,7 @@ function radialTexture(stops) {
 }
 const sun = new THREE.Sprite(
   new THREE.SpriteMaterial({
-    map: radialTexture([[0, "rgba(255,170,90,0.9)"], [0.25, "rgba(255,110,40,0.35)"], [1, "rgba(0,0,0,0)"]]),
+    map: radialTexture([[0, "rgba(255,150,80,0.55)"], [0.25, "rgba(220,90,30,0.2)"], [1, "rgba(0,0,0,0)"]]),
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     fog: false,
@@ -75,10 +82,12 @@ scene.add(sun);
 // ---------- molten chocolate lake (waves displaced in the vertex shader) ----------
 const lakeUniforms = { uTime: { value: 0 } };
 const lakeMat = new THREE.MeshPhysicalMaterial({
-  color: "#3a1a0c",
-  roughness: 0.22,
-  clearcoat: 1,
-  clearcoatRoughness: 0.12,
+  color: "#24100a",
+  roughness: 0.3, // no clearcoat: it mirrored the studio lights as white rings
+  // own envMap so envMapIntensity applies (scene.environment ignores it)
+  envMap: envTex,
+  envMapIntensity: 0.12,
+  specularColor: new THREE.Color("#d08850"),
   sheen: 0.4,
   sheenColor: new THREE.Color("#a0552a"),
 });
@@ -249,29 +258,35 @@ const dustMat = new THREE.ShaderMaterial({
     attribute float seed;
     varying float vAlpha;
     varying float vSeed;
+    varying float vBlur;
     void main() {
       vec3 p = position;
       p.y += mod(uTime * (0.15 + seed * 0.35) + seed * 20.0, 20.0) - 10.0 + 4.0;
       p.x += sin(uTime * 0.3 + seed * 30.0) * 0.6;
       vec4 mv = modelViewMatrix * vec4(p, 1.0);
       gl_Position = projectionMatrix * mv;
-      gl_PointSize = (2.0 + seed * 5.0) * uScale * (30.0 / -mv.z);
-      vAlpha = (0.35 + 0.65 * abs(sin(uTime * (0.6 + seed) + seed * 50.0))) * smoothstep(60.0, 8.0, -mv.z);
+      // dust isn't in the depth-of-field pass, so it defocuses itself:
+      // distant motes grow into soft, dim bokeh discs
+      vBlur = clamp((-mv.z - 10.0) / 30.0, 0.0, 1.0);
+      gl_PointSize = (2.0 + seed * 5.0) * uScale * (30.0 / -mv.z) * (1.0 + vBlur * 3.0);
+      vAlpha = (0.35 + 0.65 * abs(sin(uTime * (0.6 + seed) + seed * 50.0)))
+             * smoothstep(60.0, 8.0, -mv.z) / (1.0 + vBlur * 4.0);
       vSeed = seed;
     }
   `,
   fragmentShader: /* glsl */ `
     varying float vAlpha;
     varying float vSeed;
+    varying float vBlur;
     void main() {
       float d = length(gl_PointCoord - 0.5);
-      float a = smoothstep(0.5, 0.0, d);
-      vec3 col = mix(vec3(1.0, 0.62, 0.3), vec3(1.0, 0.86, 0.55), vSeed);
-      gl_FragColor = vec4(col, a * a * vAlpha * 0.8);
+      float a = smoothstep(0.5, mix(0.0, 0.3, vBlur), d);
+      vec3 col = mix(vec3(1.0, 0.55, 0.25), vec3(1.0, 0.8, 0.5), vSeed);
+      gl_FragColor = vec4(col, a * vAlpha * 0.6);
     }
   `,
 });
-scene.add(new THREE.Points(dustGeo, dustMat));
+fxScene.add(new THREE.Points(dustGeo, dustMat));
 
 // ---------- loop ----------
 const dummy = new THREE.Object3D();
@@ -281,14 +296,109 @@ window.addEventListener("pointermove", (e) => {
   pointer.y = e.clientY / window.innerHeight - 0.5;
 }, { passive: true });
 
+// ---------- depth of field: the further away, the more frosted ----------
+// Custom pass rather than BokehPass: its fixed sample pattern turns bright
+// specks into spiky stars. Here every pixel rotates its sample spiral by a
+// random angle, which reads as a soft frosted-glass grain instead.
+class FrostedDepthPass extends Pass {
+  constructor(cam) {
+    super();
+    this.material = new THREE.ShaderMaterial({
+      uniforms: {
+        tColor: { value: null },
+        tDepth: { value: null },
+        uNear: { value: cam.near },
+        uFar: { value: cam.far },
+        uFocus: { value: 11 }, // nearer than this stays sharp
+        uRange: { value: 28 }, // distance over which blur ramps to full
+        uMaxRadius: { value: 14 }, // px
+        uResolution: { value: new THREE.Vector2(1, 1) },
+      },
+      vertexShader: /* glsl */ `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        #include <packing>
+        uniform sampler2D tColor;
+        uniform sampler2D tDepth;
+        uniform float uNear, uFar, uFocus, uRange, uMaxRadius;
+        uniform vec2 uResolution;
+        varying vec2 vUv;
+
+        float blurAt(vec2 uv) {
+          float dist = -perspectiveDepthToViewZ(texture2D(tDepth, uv).x, uNear, uFar);
+          return clamp((dist - uFocus) / uRange, 0.0, 1.0) * uMaxRadius;
+        }
+        float hash(vec2 p) {
+          return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+        }
+
+        void main() {
+          vec4 base = texture2D(tColor, vUv);
+          float radius = blurAt(vUv);
+          if (radius < 0.5) { gl_FragColor = base; return; }
+          float rot = hash(gl_FragCoord.xy) * 6.2831853;
+          vec3 acc = base.rgb;
+          float wsum = 1.0;
+          const int N = 28;
+          for (int i = 0; i < N; i++) {
+            float fi = float(i);
+            float r = sqrt((fi + 0.5) / float(N)) * radius;
+            float a = fi * 2.39996323 + rot; // golden-angle spiral
+            vec2 suv = vUv + vec2(cos(a), sin(a)) * r / uResolution;
+            // a sharper (nearer) sample may not spill into this pixel's blur
+            float w = clamp(blurAt(suv) - r + 1.0, 0.0, 1.0);
+            acc += texture2D(tColor, suv).rgb * w;
+            wsum += w;
+          }
+          gl_FragColor = vec4(acc / wsum, 1.0);
+        }
+      `,
+      depthTest: false,
+      depthWrite: false,
+    });
+    this.fsQuad = new FullScreenQuad(this.material);
+  }
+  setSize(w, h) {
+    this.material.uniforms.uResolution.value.set(w, h);
+  }
+  render(renderer, writeBuffer, readBuffer) {
+    this.material.uniforms.tColor.value = readBuffer.texture;
+    this.material.uniforms.tDepth.value = readBuffer.depthTexture;
+    renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
+    if (this.clear) renderer.clear();
+    this.fsQuad.render(renderer);
+  }
+}
+
+const sceneTarget = new THREE.WebGLRenderTarget(1, 1, {
+  type: THREE.HalfFloatType,
+  depthTexture: new THREE.DepthTexture(1, 1),
+});
+const composer = new EffectComposer(renderer, sceneTarget);
+composer.addPass(new RenderPass(scene, camera, null, BG, 1));
+const frosted = new FrostedDepthPass(camera);
+composer.addPass(frosted);
+const fxPass = new RenderPass(fxScene, camera);
+fxPass.clear = false;
+composer.addPass(fxPass);
+composer.addPass(new OutputPass());
+
 function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
   renderer.setSize(w, h, false);
+  composer.setPixelRatio(renderer.getPixelRatio());
+  composer.setSize(w, h);
   camera.aspect = w / h;
   // narrow screens: pull back so the scene still fills the sides
   camera.fov = w / h < 0.8 ? 60 : 45;
   camera.updateProjectionMatrix();
+  frosted.material.uniforms.uMaxRadius.value = 14 * renderer.getPixelRatio() * Math.min(1.4, h / 900);
   dustMat.uniforms.uScale.value = renderer.getPixelRatio() * (h / 900);
 }
 window.addEventListener("resize", () => {
@@ -298,6 +408,28 @@ window.addEventListener("resize", () => {
 resize();
 
 const start = performance.now();
+
+// the depth-of-field pass is the costly part; on slow devices render the
+// background at a lower resolution (it's blurred anyway) instead of stuttering
+let lastFrame = 0;
+let slowFrames = 0;
+let sampled = 0;
+function adaptQuality() {
+  const now = performance.now();
+  const dt = now - lastFrame;
+  lastFrame = now;
+  if (dt > 200) return; // tab was hidden or first frame
+  sampled++;
+  if (dt > 28) slowFrames++;
+  if (sampled < 90) return;
+  const ratio = renderer.getPixelRatio();
+  if (slowFrames > 45 && ratio > 0.6) {
+    renderer.setPixelRatio(Math.max(0.6, ratio * 0.75));
+    resize();
+  }
+  sampled = slowFrames = 0;
+}
+
 function frame() {
   const t = reduceMotion ? 12 : (performance.now() - start) / 1000;
   lakeUniforms.uTime.value = t;
@@ -323,9 +455,10 @@ function frame() {
   camera.position.x += (pointer.x * 2.2 - camera.position.x) * 0.03;
   camera.position.y += (0.6 - pointer.y * 1.4 - camera.position.y) * 0.03;
   camera.lookAt(0, 0.4, -6);
-  glowLight.intensity = 55 + Math.sin(t * 1.4) * 10;
+  glowLight.intensity = 34 + Math.sin(t * 1.4) * 6;
 
-  renderer.render(scene, camera);
+  composer.render();
+  adaptQuality();
 }
 
 if (reduceMotion) {
