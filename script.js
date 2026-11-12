@@ -53,67 +53,6 @@ function pixelIcon(path, grid = ICON_GRID) {
   }
 }
 
-// heading: drawn small, then scaled up with hard pixel edges; the text stays for screen readers
-(function pixelTitle() {
-  const h1 = document.querySelector("h1");
-  const label = h1 && h1.querySelector(".title-text");
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext && canvas.getContext("2d");
-  if (!label || !ctx) return;
-  canvas.className = "title-px";
-  canvas.setAttribute("aria-hidden", "true");
-
-  function draw() {
-    const cs = getComputedStyle(h1);
-    const size = parseFloat(cs.fontSize) / PX;
-    const font = `${cs.fontStyle} ${cs.fontWeight} ${size}px ${cs.fontFamily}`;
-    const text = label.textContent.trim();
-    ctx.font = font;
-    const m = ctx.measureText(text);
-    const left = m.actualBoundingBoxLeft || 0;
-    const right = m.actualBoundingBoxRight || m.width;
-    const asc = m.actualBoundingBoxAscent || size * 0.8;
-    const desc = m.actualBoundingBoxDescent || size * 0.25;
-    canvas.width = Math.ceil(left + right) + 2;
-    canvas.height = Math.ceil(asc + desc) + 2;
-    ctx.font = font; // resizing a canvas resets its state
-    const g = ctx.createLinearGradient(0, 1, 0, canvas.height - 1);
-    g.addColorStop(0, "#f0d4ad");
-    g.addColorStop(1, "#a8693e");
-    ctx.fillStyle = g;
-    ctx.fillText(text, 1 + left, 1 + asc);
-    canvas.style.width = `${canvas.width * PX}px`;
-    canvas.style.height = `${canvas.height * PX}px`;
-    if (!canvas.parentNode) {
-      h1.appendChild(canvas);
-      h1.classList.add("px");
-    }
-  }
-
-  let queued = false;
-  const redraw = () => {
-    if (queued) return;
-    queued = true;
-    requestAnimationFrame(() => {
-      queued = false;
-      draw();
-    });
-  };
-  window.addEventListener("resize", redraw);
-
-  // wait briefly for the heading font so the pixel version doesn't swap fonts
-  const spec = 'italic 600 16px "Playfair Display"';
-  if (!document.fonts || document.fonts.check(spec)) return draw();
-  let drawn = false;
-  const first = () => {
-    if (drawn) return;
-    drawn = true;
-    draw();
-  };
-  document.fonts.load(spec).then(() => (drawn ? redraw() : first()), first);
-  setTimeout(first, 1200);
-})();
-
 // --- pixel-art chocolate: the tiles are drawn on the same pixel grid as the icons ---
 
 // colour ramps, darkest to brightest
@@ -121,6 +60,8 @@ const RAMPS = {
   dark: ["#170a04", "#231008", "#30170c", "#3f1f10", "#4f2815", "#61311a", "#763d21", "#8e4b2a", "#ae653e", "#dc9a6c"],
   white: ["#6c5737", "#86704b", "#a08a62", "#b9a47c", "#ccb893", "#dccaa8", "#e9dbbc", "#f3e8d1", "#fbf4e7", "#ffffff"],
 };
+// shared with the background (src/background.js), which is drawn in the same colours
+window.RAMPS = RAMPS;
 const RAMP_RGB = Object.fromEntries(
   Object.entries(RAMPS).map(([k, r]) => [k, r.map((h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)))])
 );

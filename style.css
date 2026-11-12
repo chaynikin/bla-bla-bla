@@ -1,14 +1,5 @@
-/* heading font: Playfair Display, SIL Open Font License (fonts/OFL.txt) */
-@font-face {
-  font-family: "Playfair Display";
-  src: url("fonts/playfair-display-latin-600-italic.woff2") format("woff2");
-  font-weight: 600;
-  font-style: italic;
-  font-display: swap;
-}
-
 :root {
-  --px: 3; /* one "pixel" in CSS px: background, heading, tiles, icons and crumbs */
+  --px: 3; /* one "pixel" in CSS px: background, tiles, icons and crumbs */
   --tile-color: #7a4022;
   --icon-color: #f3dbb5;
   --tile-size: 132px;
@@ -69,38 +60,14 @@ main {
   min-height: 100vh;
 }
 
-h1 {
-  margin: 0;
-  /* room for the italic overhang, which background-clip: text would cut off */
-  padding: 0 0.12em;
-  text-align: center;
-  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
-  font-style: italic;
-  font-weight: 600;
-  font-size: clamp(2rem, 6vw, 3.2rem);
-  letter-spacing: 0.02em;
-  background: linear-gradient(180deg, #f0d4ad, #a8693e);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  /* hard pixel shadow plus a soft glow */
-  filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.55)) drop-shadow(0 0 16px rgba(255, 150, 80, 0.22));
-}
-/* pixelated heading drawn by script.js; the text stays for screen readers */
-h1.px { background: none; }
-h1.px .title-text {
+/* kept for screen readers; there is no visible heading */
+.sr-only {
   position: absolute;
   width: 1px;
   height: 1px;
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
-}
-.title-px {
-  display: block;
-  margin: 0 auto;
-  image-rendering: crisp-edges;
-  image-rendering: pixelated;
 }
 
 /* ---------- stage ---------- */
@@ -318,3 +285,8 @@ h1.px .title-text {
   .glow { width: 320px; height: 460px; }
   .shadow { bottom: 2px; width: 190px; }
 }
+
+/* the WebGL background draws its own pixel-art glow, shadow and vignette */
+.bg-ready .glow,
+.bg-ready .shadow,
+.bg-ready body::after { display: none; }

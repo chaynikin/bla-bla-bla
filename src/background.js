@@ -48,10 +48,10 @@ camera.position.set(0, 0.6, 14);
 // ---------- lights ----------
 scene.add(new THREE.HemisphereLight("#ffd9b0", "#1a0a04", 0.32));
 const key = new THREE.DirectionalLight("#ffd2a1", 1.9);
-key.position.set(6, 10, 8);
+key.position.set(-6, 10, 8); // top left, like the light on the tiles
 scene.add(key);
 const rim = new THREE.DirectionalLight("#ff7a2e", 1.7);
-rim.position.set(-8, 3, -10);
+rim.position.set(8, 3, -10);
 scene.add(rim);
 const glowLight = new THREE.PointLight("#ff9a4a", 38, 40, 1.6);
 glowLight.position.set(0, 1, -2);
@@ -72,7 +72,7 @@ function radialTexture(stops) {
 }
 const sun = new THREE.Sprite(
   new THREE.SpriteMaterial({
-    map: radialTexture([[0, "rgba(255,150,80,0.55)"], [0.25, "rgba(220,90,30,0.2)"], [1, "rgba(0,0,0,0)"]]),
+    map: radialTexture([[0, "rgba(255,150,80,0.26)"], [0.25, "rgba(220,90,30,0.1)"], [1, "rgba(0,0,0,0)"]]),
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     fog: false,
@@ -215,11 +215,11 @@ milkMat.color.set("#7a4426");
 const beanMat = new THREE.MeshStandardMaterial({ color: "#5b2a17", roughness: 0.55 });
 const nutMat = new THREE.MeshStandardMaterial({ color: "#8a5530", roughness: 0.45 });
 const foilMat = new THREE.MeshStandardMaterial({
-  color: "#ffcf73",
+  color: "#d9a95a",
   metalness: 1,
   roughness: 0.22,
   side: THREE.DoubleSide,
-  envMapIntensity: 1.6,
+  envMapIntensity: 0.8,
 });
 
 // ---------- floating instanced objects ----------
@@ -400,6 +400,90 @@ class FrostedDepthPass extends Pass {
   }
 }
 
+// ---------- pixel-art grade: the tiles' colours and dithering ----------
+// The finished frame is mapped by brightness onto the tiles' chocolate ramp
+// (script.js), extended with two deeper shades for the far background and the
+// icon cream for the brightest sparkles, then dithered with the tiles' 4×4 pattern.
+const iconColor = getComputedStyle(document.documentElement).getPropertyValue("--icon-color").trim();
+const PALETTE = ["#0b0402", "#110703", ...window.RAMPS.dark, /^#[0-9a-f]{6}$/i.test(iconColor) ? iconColor : "#f3dbb5"];
+const paletteTex = new THREE.DataTexture(
+  new Uint8Array(PALETTE.flatMap((h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)).concat(255))),
+  PALETTE.length,
+  1
+);
+paletteTex.needsUpdate = true;
+
+class PixelArtPass extends Pass {
+  constructor() {
+    super();
+    this.uniforms = {
+      tColor: { value: null },
+      tPalette: { value: paletteTex },
+      uCount: { value: PALETTE.length },
+      uGain: { value: 2.0 },
+      uGamma: { value: 0.86 },
+      uResolution: { value: new THREE.Vector2(1, 1) },
+      uGlowCenter: { value: new THREE.Vector2(-1e4, -1e4) },
+      uGlowRadius: { value: new THREE.Vector2(1, 1) },
+      uGlow: { value: 0 },
+      uShadowCenter: { value: new THREE.Vector2(-1e4, -1e4) },
+      uShadowRadius: { value: new THREE.Vector2(1, 1) },
+    };
+    this.material = new THREE.ShaderMaterial({
+      uniforms: this.uniforms,
+      vertexShader: /* glsl */ `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform sampler2D tColor;
+        uniform sampler2D tPalette;
+        uniform float uCount, uGain, uGamma, uGlow;
+        uniform vec2 uResolution, uGlowCenter, uGlowRadius, uShadowCenter, uShadowRadius;
+        varying vec2 vUv;
+
+        // 2×2 Bayer cell; nested twice it is the tiles' 4×4 matrix
+        float bayer2(vec2 p) { return mod(2.0 * p.x + 3.0 * p.y, 4.0); }
+
+        void main() {
+          // pixel position with y down, like the tiles' canvases (positions in low-res px)
+          vec2 px = floor(vec2(gl_FragCoord.x, uResolution.y - gl_FragCoord.y));
+          float lum = dot(texture2D(tColor, vUv).rgb, vec3(0.2126, 0.7152, 0.0722));
+
+          // warm glow behind the tiles and their soft shadow
+          float g = length((px - uGlowCenter) / uGlowRadius);
+          lum += uGlow * 0.16 * pow(clamp(1.0 - g, 0.0, 1.0), 1.6);
+          float s = length((px - uShadowCenter) / uShadowRadius);
+          lum *= 1.0 - 0.7 * clamp(1.0 - s, 0.0, 1.0);
+          // vignette
+          lum *= mix(1.0, 0.3, smoothstep(0.35, 1.0, length(vUv - 0.5) * 1.4142));
+
+          // onto the ramp, dithering only around the midpoint between two shades
+          float v = pow(clamp(lum * uGain, 0.0, 1.0), uGamma) * (uCount - 1.0);
+          float b = 4.0 * bayer2(mod(px, 2.0)) + bayer2(mod(floor(px / 2.0), 2.0));
+          float t = 0.5 + ((b + 0.5) / 16.0 - 0.5) * 0.5;
+          float i = clamp(floor(v) + step(t, fract(v)), 0.0, uCount - 1.0);
+          gl_FragColor = vec4(texture2D(tPalette, vec2((i + 0.5) / uCount, 0.5)).rgb, 1.0);
+        }
+      `,
+      depthTest: false,
+      depthWrite: false,
+    });
+    this.fsQuad = new FullScreenQuad(this.material);
+  }
+  setSize(w, h) {
+    this.uniforms.uResolution.value.set(w, h);
+  }
+  render(renderer, writeBuffer, readBuffer) {
+    this.uniforms.tColor.value = readBuffer.texture;
+    renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
+    this.fsQuad.render(renderer);
+  }
+}
+
 const sceneTarget = new THREE.WebGLRenderTarget(1, 1, {
   type: THREE.HalfFloatType,
   depthTexture: new THREE.DepthTexture(1, 1),
@@ -412,6 +496,34 @@ const fxPass = new RenderPass(fxScene, camera);
 fxPass.clear = false;
 composer.addPass(fxPass);
 composer.addPass(new OutputPass());
+const pixelArt = new PixelArtPass();
+composer.addPass(pixelArt);
+
+// the glow and shadow follow the stage that holds the tiles
+const stageEl = document.getElementById("stage");
+let stageRect = null;
+const measureStage = () => (stageRect = stageEl ? stageEl.getBoundingClientRect() : null);
+window.addEventListener("scroll", measureStage, { passive: true });
+let breakAt = null;
+
+function updateGlow(t) {
+  if (!stageRect) return;
+  const u = pixelArt.uniforms;
+  const s = stageRect.height / 600; // the stage is 600px tall at full size
+  if (breakAt === null && stageEl.classList.contains("broken")) breakAt = t;
+  // flare as the slab breaks, then a slow pulse
+  const flare = breakAt === null || reduceMotion ? 0 : Math.exp(-(t - breakAt) / 0.35);
+  const spread = breakAt === null ? 0 : reduceMotion ? 1 : Math.min(1, (t - breakAt) / 0.9);
+  const pulse = reduceMotion ? 0.85 : 0.85 + 0.15 * Math.sin((t / 4.5) * Math.PI * 2);
+  const shown = parseFloat(stageEl.style.opacity); // the stage fades in as the slab arrives
+  const cx = (stageRect.left + stageRect.width / 2) / PIXEL;
+  const cy = (stageRect.top + stageRect.height / 2) / PIXEL;
+  u.uGlowCenter.value.set(cx, cy);
+  u.uGlowRadius.value.set((190 * s * (1 + 0.3 * flare)) / PIXEL, (270 * s * (1 + 0.3 * flare)) / PIXEL);
+  u.uGlow.value = (Number.isNaN(shown) ? 1 : shown) * (pulse + flare);
+  u.uShadowCenter.value.set(cx, (stageRect.bottom - 32 * s) / PIXEL);
+  u.uShadowRadius.value.set((115 * s * (1 + 0.3 * spread)) / PIXEL, (14 * s) / PIXEL);
+}
 
 function resize() {
   // one render pixel per PIXEL × PIXEL CSS pixels; CSS scales it up with hard edges
@@ -429,6 +541,7 @@ function resize() {
   const scale = window.innerHeight / 900 / PIXEL;
   frosted.material.uniforms.uMaxRadius.value = 14 * Math.min(1.4 / PIXEL, scale);
   dustMat.uniforms.uScale.value = scale;
+  measureStage();
 }
 window.addEventListener("resize", () => {
   resize();
@@ -464,6 +577,7 @@ function frame() {
   camera.position.y += (0.6 - pointer.y * 1.4 - camera.position.y) * 0.03;
   camera.lookAt(0, 0.4, -6);
   glowLight.intensity = 34 + Math.sin(t * 1.4) * 6;
+  updateGlow(t);
 
   composer.render();
 }
@@ -474,3 +588,5 @@ if (reduceMotion) {
   renderer.setAnimationLoop(frame);
 }
 canvas.classList.add("ready");
+// the CSS glow, shadow and vignette stand in only until this takes over
+document.documentElement.classList.add("bg-ready");
