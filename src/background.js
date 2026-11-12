@@ -129,11 +129,31 @@ lake.position.set(0, -6.5, -25);
 scene.add(lake);
 
 // ---------- geometries ----------
-function chocolateSquareGeometry() {
-  const base = new RoundedBoxGeometry(1.5, 1.5, 0.42, 3, 0.1);
-  const plateau = new RoundedBoxGeometry(1.0, 1.0, 0.2, 3, 0.07);
-  plateau.translate(0, 0, 0.22);
-  return mergeGeometries([base, plateau]);
+// moulded bar: a thin base with a rim, topped by a grid of bevelled segments
+// whose slopes meet in V-shaped grooves
+function chocolateBarGeometry(cols, rows) {
+  const S = 0.6; // segment pitch
+  const BASE = 0.1;
+  const SEG = 0.17;
+  const BEVEL = 0.13;
+  const RIM = 0.07;
+  const parts = [new RoundedBoxGeometry(cols * S + 2 * RIM, rows * S + 2 * RIM, BASE, 2, 0.03)];
+  const k = (S - 2 * BEVEL) / S;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const seg = new THREE.BoxGeometry(S, S, SEG).toNonIndexed(); // RoundedBoxGeometry is non-indexed too
+      const p = seg.attributes.position;
+      for (let i = 0; i < p.count; i++) {
+        if (p.getZ(i) > 0) p.setXY(i, p.getX(i) * k, p.getY(i) * k);
+      }
+      seg.computeVertexNormals(); // per-triangle vertices: crisp facets
+      seg.translate((c - (cols - 1) / 2) * S, (r - (rows - 1) / 2) * S, BASE / 2 + SEG / 2);
+      parts.push(seg);
+    }
+  }
+  const g = mergeGeometries(parts);
+  g.translate(0, 0, -SEG / 2);
+  return g;
 }
 
 function cocoaBeanGeometry() {
@@ -229,8 +249,10 @@ function makeField(geometry, material, count, opts) {
 }
 
 const fields = [
-  makeField(chocolateSquareGeometry(), chocolateMat, Math.round(26 * density), { spin: 0.25, scale: [0.7, 1.25] }),
-  makeField(chocolateSquareGeometry(), milkMat, Math.round(14 * density), { spin: 0.25, scale: [0.6, 1.1] }),
+  makeField(chocolateBarGeometry(3, 4), chocolateMat, Math.round(12 * density), { spin: 0.2, scale: [0.8, 1.15] }),
+  makeField(chocolateBarGeometry(2, 3), milkMat, Math.round(10 * density), { spin: 0.22, scale: [0.8, 1.15] }),
+  makeField(chocolateBarGeometry(2, 2), chocolateMat, Math.round(12 * density), { spin: 0.3, scale: [0.8, 1.2] }),
+  makeField(chocolateBarGeometry(1, 2), milkMat, Math.round(10 * density), { spin: 0.35, scale: [0.8, 1.2] }),
   makeField(chunkGeometry(), chocolateMat, Math.round(24 * density), { spin: 0.4, scale: [0.6, 1.3] }),
   makeField(cocoaBeanGeometry(), beanMat, Math.round(26 * density), { spin: 0.35, scale: [0.6, 1.0] }),
   makeField(hazelnutGeometry(), nutMat, Math.round(18 * density), { spin: 0.35, scale: [0.8, 1.3] }),

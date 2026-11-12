@@ -114,7 +114,118 @@ function pixelIcon(path, grid = ICON_GRID) {
   setTimeout(first, 1200);
 })();
 
-// --- the slab: 2 × 3 smooth tiles, one link each ---
+// --- pixel-art chocolate: the tiles are drawn on the same pixel grid as the icons ---
+
+// colour ramps, darkest to brightest
+const RAMPS = {
+  dark: ["#170a04", "#231008", "#30170c", "#3f1f10", "#4f2815", "#61311a", "#763d21", "#8e4b2a", "#ae653e", "#dc9a6c"],
+  white: ["#6c5737", "#86704b", "#a08a62", "#b9a47c", "#ccb893", "#dccaa8", "#e9dbbc", "#f3e8d1", "#fbf4e7", "#ffffff"],
+};
+const RAMP_RGB = Object.fromEntries(
+  Object.entries(RAMPS).map(([k, r]) => [k, r.map((h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)))])
+);
+const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+const rootStyle = getComputedStyle(document.documentElement);
+const TILE_UNITS = Math.round((parseFloat(rootStyle.getPropertyValue("--tile-size")) || 132) / PX);
+const DEPTH_UNITS = Math.max(2, Math.round((parseFloat(rootStyle.getPropertyValue("--tile-depth")) || 21) / PX));
+
+// paint(x, y) returns a position on the ramp (or null for transparent); ordered
+// dithering picks between neighbouring colours, the way pixel artists shade
+function pixelCanvas(w, h, ramp, paint) {
+  const cv = document.createElement("canvas");
+  cv.width = w;
+  cv.height = h;
+  const ctx = cv.getContext("2d");
+  if (!ctx) return cv;
+  const img = ctx.createImageData(w, h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const v = paint(x, y);
+      if (v === null) continue;
+      // dither only around the midpoint between two colours, so flat areas stay smooth
+      const t = 0.5 + ((BAYER4[(y & 3) * 4 + (x & 3)] + 0.5) / 16 - 0.5) * 0.5;
+      const i = Math.max(0, Math.min(ramp.length - 1, Math.floor(v) + (v - Math.floor(v) > t ? 1 : 0)));
+      const o = (y * w + x) * 4;
+      img.data.set(ramp[i], o);
+      img.data[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return cv;
+}
+
+// the bar's outer corners are rounded off by a pixel step
+function cornerCut(x, y, w, h, outer) {
+  if (Math.min(x, w - 1 - x) + Math.min(y, h - 1 - y) >= 2) return false;
+  return (y < h / 2 ? outer.t : outer.b) && (x < w / 2 ? outer.l : outer.r);
+}
+
+// top of one piece, lit from the top left: a glossy plateau, bevels sloping
+// down into the grooves between pieces, a flat rim along the bar's outer edge
+function chocolateTop(outer, ramp, rnd) {
+  const N = TILE_UNITS;
+  const LIP = 2;
+  const BEV = 5;
+  const lt = outer.t ? LIP : 0, lr = outer.r ? LIP : 0, lb = outer.b ? LIP : 0, ll = outer.l ? LIP : 0;
+  const x0 = ll + BEV, y0 = lt + BEV, x1 = N - 1 - lr - BEV, y1 = N - 1 - lb - BEV;
+  return pixelCanvas(N, N, ramp, (x, y) => {
+    if (cornerCut(x, y, N, N, outer)) return null;
+    if (x < ll || y < lt || x > N - 1 - lr || y > N - 1 - lb) {
+      if (y === 0) return 5.6;
+      if (x === 0) return 5.1;
+      if (y === N - 1) return 2.6;
+      if (x === N - 1) return 3;
+      return 4.2;
+    }
+    if (x >= x0 && x <= x1 && y >= y0 && y <= y1) {
+      if (y === y0) return 7.8; // edge catching the light
+      if (x === x0) return 7;
+      // glint
+      const gx = x - x0, gy = y - y0;
+      if (gx + gy === 4 && gx >= 1 && gx <= 3) return gx === 2 ? 9 : 8.2;
+      const u = (x - x0 + y - y0) / (x1 - x0 + y1 - y0); // 0 top left … 1 bottom right
+      let v = 5.9 - 1.2 * u;
+      const s = Math.abs(u - 0.3); // soft glossy reflection
+      if (s < 0.12) v += 1.1 * (1 - s / 0.12);
+      if (y === y1 || x === x1) v -= 0.6;
+      if (rnd() < 0.025) v += rnd() < 0.5 ? -0.7 : 0.7;
+      return v;
+    }
+    // bevels, mitred at the corners
+    const dl = x0 - x, dr = x - x1, dt = y0 - y, db = y - y1;
+    const m = Math.max(dl, dr, dt, db);
+    const f = (m - 1) / (BEV - 1); // 0 by the plateau … 1 in the groove
+    let v;
+    if (dt === m && dt >= dl && dt >= dr) v = 7.4 - 1.3 * f;
+    else if (db === m && db >= dl && db >= dr) v = 2.7 - f;
+    else if (dl === m) v = 6.2 - 1.1 * f;
+    else v = 3.5 - f;
+    if (m === BEV) v -= 0.8; // crease at the bottom of the groove
+    return v;
+  });
+}
+
+// side walls: smooth along the bar's moulded edge, matte and grainy where it snapped
+function chocolateSide(side, broken, len, ramp, rnd) {
+  const D = DEPTH_UNITS;
+  const vertical = side === "l" || side === "r";
+  const base = { t: 5, l: 4.4, r: 2.8, b: 2.2 }[side];
+  return pixelCanvas(vertical ? D : len, vertical ? len : D, ramp, (x, y) => {
+    const a = vertical ? x : y;
+    const k = side === "l" || side === "t" ? 1 - a / (D - 1) : a / (D - 1); // 0 at the top surface … 1 underneath
+    if (broken) return base + 1.3 - 0.5 * k + (rnd() - 0.5) * 2.4;
+    return base + 0.5 - k + (k === 0 ? 1 : 0);
+  });
+}
+
+// underside, seen mirrored from behind
+function chocolateUnderside(outer, ramp, rnd) {
+  const N = TILE_UNITS;
+  const mirrored = { t: outer.t, b: outer.b, l: outer.r, r: outer.l };
+  return pixelCanvas(N, N, ramp, (x, y) => (cornerCut(x, y, N, N, mirrored) ? null : 2.3 + (rnd() - 0.5) * 0.8));
+}
+
+// --- the slab: 2 × 3 chocolate pieces, one link each ---
 const stage = document.getElementById("stage");
 const bar = document.getElementById("bar");
 const COLS = 2;
@@ -124,7 +235,7 @@ const linkItems = [
   { id: "email", label: "Email", url: `mailto:${CONFIG.email}`, path: EMAIL_ICON },
 ];
 
-// seeded, so the tiles always land in the same tidy scatter
+// seeded, so the pieces always land in the same tidy scatter and keep their grain
 function mulberry32(seed) {
   return () => {
     seed = (seed + 0x6d2b79f5) | 0;
@@ -157,18 +268,39 @@ const tiles = linkItems.map((item, i) => {
     a.rel = "noopener noreferrer";
   }
 
-  // the slab's outer corners are rounded from the start, the rest once it breaks
+  // which sides lie on the bar's outer edge (the rest snap off)
   const top = r === 0;
   const bottom = r === ROWS - 1;
   const left = c === 0;
   const right = c === COLS - 1;
+  const outer = { t: top, r: right, b: bottom, l: left };
   a.style.cssText =
     `--col:${c};--row:${r};` +
     `--o-tl:${+(top && left)};--o-tr:${+(top && right)};--o-br:${+(bottom && right)};--o-bl:${+(bottom && left)}`;
   a.innerHTML =
-    // back first: if a browser ever draws the tile flat, the front still ends up on top
-    `<span class="tb"></span><span class="tf">${pixelIcon(item.path)}</span>` +
-    ["l", "r", "t", "b"].map((s) => `<span class="te ${s}"></span>`).join("");
+    // front last: if a browser ever draws the tile flat, it still ends up on top
+    `<span class="tb"></span>` +
+    ["l", "r", "t", "b"].map((s) => `<span class="te ${s}"></span>`).join("") +
+    `<span class="tf">${pixelIcon(item.path)}</span>`;
+
+  // textures; the white-chocolate top (shown on hover) shares the dark one's grain
+  const seed = 7 + i;
+  const tf = a.querySelector(".tf");
+  const whiteTop = chocolateTop(outer, RAMP_RGB.white, mulberry32(seed));
+  whiteTop.className = "white";
+  tf.prepend(chocolateTop(outer, RAMP_RGB.dark, mulberry32(seed)), whiteTop);
+  const grain = mulberry32(seed * 31);
+  a.querySelector(".tb").appendChild(chocolateUnderside(outer, RAMP_RGB.dark, grain));
+  const corner = (p, q) => +(outer[p] && outer[q]); // 1 where a rounded corner shortens a wall
+  const wallLen = {
+    l: TILE_UNITS - corner("t", "l") - corner("b", "l"),
+    r: TILE_UNITS - corner("t", "r") - corner("b", "r"),
+    t: TILE_UNITS - corner("t", "l") - corner("t", "r"),
+    b: TILE_UNITS - corner("b", "l") - corner("b", "r"),
+  };
+  for (const s of ["l", "r", "t", "b"]) {
+    a.querySelector(`.te.${s}`).appendChild(chocolateSide(s, !outer[s], wallLen[s], RAMP_RGB.dark, grain));
+  }
   bar.appendChild(a);
 
   return {
@@ -217,7 +349,7 @@ form.addEventListener("submit", () => {
 // --- entrance: the slab flies in, cracks and breaks into its six tiles ---
 const hoverable = window.matchMedia("(hover: hover)");
 const FOCUS = window.CSS && CSS.supports("selector(:focus-visible)") ? ":focus-visible" : ":focus";
-const D = parseFloat(getComputedStyle(bar).getPropertyValue("--tile-depth")) || 20;
+const D = parseFloat(getComputedStyle(bar).getPropertyValue("--tile-depth")) || 21;
 
 // ms after the first frame
 const T = { appear: 800, burst: 1150, end: 2150 };
@@ -275,12 +407,12 @@ function spawnCrumbs() {
   const H = bar.offsetHeight;
   for (let i = 0; i < 40; i++) {
     const s = document.createElement("span");
-    s.className = i % 2 ? "crumb" : "crumb alt";
+    s.className = "crumb";
     const k = i % 3;
     const x = k === 0 ? W / 2 : Math.random() * W;
     const y = k === 0 ? Math.random() * H : (H / 3) * k;
     const size = PX * (Math.random() < 0.65 ? 1 : 2);
-    s.style.cssText = `left:${x}px;top:${y}px;width:${size}px;height:${size}px`;
+    s.style.cssText = `left:${x}px;top:${y}px;width:${size}px;height:${size}px;background:${RAMPS.dark[3 + Math.floor(Math.random() * 5)]}`;
     bar.appendChild(s);
     const dx = (x - W / 2) * 0.5 + (Math.random() - 0.5) * 140;
     const up = -30 - Math.random() * 90;

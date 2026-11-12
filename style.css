@@ -8,12 +8,11 @@
 }
 
 :root {
-  --px: 3; /* one "pixel" in CSS px: background, heading, icons and crumbs */
+  --px: 3; /* one "pixel" in CSS px: background, heading, tiles, icons and crumbs */
   --tile-color: #7a4022;
   --icon-color: #f3dbb5;
   --tile-size: 132px;
-  --tile-depth: 20px;
-  --tile-round: 10px;
+  --tile-depth: 21px; /* sizes are whole multiples of --px */
   --cream: #eadbc6;
   color-scheme: dark;
 }
@@ -165,16 +164,10 @@ h1.px .title-text {
   will-change: transform;
 }
 
-/* ---------- tiles: smooth, two colours, one link each ---------- */
+/* ---------- tiles: pixel-art chocolate, one link each ---------- */
 
 .tile {
-  --fill: var(--tile-color);
   --ink: var(--icon-color);
-  /* 1 = rounded corner; only the slab's outer corners until it breaks */
-  --k-tl: var(--o-tl);
-  --k-tr: var(--o-tr);
-  --k-br: var(--o-br);
-  --k-bl: var(--o-bl);
   position: absolute;
   left: calc(var(--tile-size) * var(--col));
   top: calc(var(--tile-size) * var(--row));
@@ -185,75 +178,69 @@ h1.px .title-text {
   outline: none;
   -webkit-tap-highlight-color: transparent;
 }
-.stage.broken .tile { --k-tl: 1; --k-tr: 1; --k-br: 1; --k-bl: 1; }
-
-/* hover and focus swap the two colours */
-.stage.broken .tile:focus-visible,
-.stage.broken .tile:active { --fill: var(--icon-color); --ink: var(--tile-color); }
-@media (hover: hover) {
-  .stage.broken .tile:hover { --fill: var(--icon-color); --ink: var(--tile-color); }
-}
 
 .tile > span {
   position: absolute; /* blockified, so .tf can still be a grid */
   pointer-events: auto;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
-  transition:
-    background-color 0.2s ease,
-    color 0.2s ease,
-    border-radius 0.6s ease,
-    top 0.6s ease,
-    right 0.6s ease,
-    bottom 0.6s ease,
-    left 0.6s ease;
+}
+/* textures from script.js: one canvas pixel per --px, scaled up with hard edges */
+.tile canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
 }
 
 .tf {
   inset: 0;
   display: grid;
   place-items: center;
-  border-radius:
-    calc(var(--k-tl) * var(--tile-round)) calc(var(--k-tr) * var(--tile-round))
-    calc(var(--k-br) * var(--tile-round)) calc(var(--k-bl) * var(--tile-round));
-  background-color: var(--fill);
   color: var(--ink);
   transform: translateZ(calc(var(--tile-depth) / 2));
+  transition: color 0.2s ease;
 }
-.tf svg { display: block; fill: currentColor; }
+.tf svg { position: relative; display: block; fill: currentColor; }
 
-/* back is mirrored, so its corners swap left and right */
-.tb {
-  inset: 0;
-  border-radius:
-    calc(var(--k-tr) * var(--tile-round)) calc(var(--k-tl) * var(--tile-round))
-    calc(var(--k-bl) * var(--tile-round)) calc(var(--k-br) * var(--tile-round));
-  background: linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45)) var(--fill);
-  transform: rotateY(180deg) translateZ(calc(var(--tile-depth) / 2));
+/* hover and focus turn the piece into white chocolate with a dark icon */
+.tf canvas.white { opacity: 0; transition: opacity 0.2s ease; }
+.stage.broken .tile:focus-visible,
+.stage.broken .tile:active { --ink: var(--tile-color); }
+.stage.broken .tile:focus-visible .white,
+.stage.broken .tile:active .white { opacity: 1; }
+@media (hover: hover) {
+  .stage.broken .tile:hover { --ink: var(--tile-color); }
+  .stage.broken .tile:hover .white { opacity: 1; }
 }
 
-/* sides: the same colour in shade, stopping short of rounded corners */
-.te { background: linear-gradient(rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.3)) var(--fill); }
+.tb { inset: 0; transform: rotateY(180deg) translateZ(calc(var(--tile-depth) / 2)); }
+
+/* side walls, one pixel short of the bar's rounded outer corners */
 .te.l, .te.r { left: calc(50% - var(--tile-depth) / 2); width: var(--tile-depth); }
 .te.t, .te.b { top: calc(50% - var(--tile-depth) / 2); height: var(--tile-depth); }
 .te.l {
-  top: calc(var(--k-tl) * var(--tile-round));
-  bottom: calc(var(--k-bl) * var(--tile-round));
+  top: calc(var(--o-tl) * var(--px) * 1px);
+  bottom: calc(var(--o-bl) * var(--px) * 1px);
   transform: rotateY(-90deg) translateZ(calc(var(--tile-size) / 2));
 }
 .te.r {
-  top: calc(var(--k-tr) * var(--tile-round));
-  bottom: calc(var(--k-br) * var(--tile-round));
+  top: calc(var(--o-tr) * var(--px) * 1px);
+  bottom: calc(var(--o-br) * var(--px) * 1px);
   transform: rotateY(90deg) translateZ(calc(var(--tile-size) / 2));
 }
 .te.t {
-  left: calc(var(--k-tl) * var(--tile-round));
-  right: calc(var(--k-tr) * var(--tile-round));
+  left: calc(var(--o-tl) * var(--px) * 1px);
+  right: calc(var(--o-tr) * var(--px) * 1px);
   transform: rotateX(90deg) translateZ(calc(var(--tile-size) / 2));
 }
 .te.b {
-  left: calc(var(--k-bl) * var(--tile-round));
-  right: calc(var(--k-br) * var(--tile-round));
+  left: calc(var(--o-bl) * var(--px) * 1px);
+  right: calc(var(--o-br) * var(--px) * 1px);
   transform: rotateX(-90deg) translateZ(calc(var(--tile-size) / 2));
 }
 
@@ -278,8 +265,7 @@ h1.px .title-text {
 .crack.h1 { top: calc(var(--tile-size) - var(--px) * 0.5px); }
 .crack.h2 { top: calc(var(--tile-size) * 2 - var(--px) * 0.5px); }
 
-.crumb { position: absolute; pointer-events: none; background: var(--tile-color); }
-.crumb.alt { background: var(--icon-color); }
+.crumb { position: absolute; pointer-events: none; } /* colour set by script.js */
 
 /* ---------- email dialog ---------- */
 
@@ -322,7 +308,6 @@ h1.px .title-text {
 
 @media (prefers-reduced-motion: reduce) {
   .glow, .stage.broken .glow { animation: none; }
-  .tile > span { transition: background-color 0.2s ease, color 0.2s ease; }
 }
 
 /* ---------- small screens ---------- */
