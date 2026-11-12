@@ -7,7 +7,7 @@
   <meta name="description" content="A rotatable chocolate bar and my links." />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍫</text></svg>" />
   <link rel="preload" href="fonts/playfair-display-latin-600-italic.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="stylesheet" href="style.css?v=6" />
+  <link rel="stylesheet" href="style.css?v=7" />
 </head>
 <body>
   <canvas id="bg" aria-hidden="true"></canvas>
@@ -16,23 +16,14 @@
       <h1>Chaynikin Links</h1>
     </header>
 
-    <section
-      class="stage"
-      id="stage"
-      tabindex="0"
-      role="group"
-      aria-label="Chocolate bar with my links. Drag or use the arrow keys to rotate it."
-    >
+    <section class="stage" id="stage" aria-label="My links">
       <!-- before the bar so the 3D bar paints over them -->
       <div class="glow" aria-hidden="true"></div>
       <div class="shadow" aria-hidden="true"></div>
       <div class="scaler">
-        <div class="bar" id="bar">
-          <div class="face front">
-            <!-- 3 × 6 grid of pieces; the middle rows hold the links (script.js) -->
-            <nav class="pieces" id="pieces" aria-label="Social media and email"></nav>
-          </div>
-          <div class="face back">
+        <!-- the six chocolate pieces (one link each), crack lines and crumbs are added by script.js -->
+        <nav class="bar" id="bar" aria-label="Social media and email">
+          <div class="face back" aria-hidden="true">
             <!-- wrapper; guilloché, foil crimp and barcode are drawn by script.js -->
             <svg class="wrap" viewBox="0 0 252 472" preserveAspectRatio="none" aria-hidden="true">
               <defs>
@@ -180,11 +171,7 @@
               <text x="16" y="470.5" font-family="system-ui, sans-serif" font-size="3.6" letter-spacing="1.2" fill="#c9a65e" opacity=".7">✂ PULL TO OPEN</text>
             </svg>
           </div>
-          <div class="face side right"></div>
-          <div class="face side left"></div>
-          <div class="face end top"></div>
-          <div class="face end bottom"></div>
-        </div>
+        </nav>
       </div>
     </section>
   </main>
@@ -208,9 +195,9 @@
     </form>
   </dialog>
 
-  <script src="icons.js?v=6"></script>
-  <script src="script.js?v=6"></script>
+  <script src="icons.js?v=7"></script>
+  <script src="script.js?v=7"></script>
   <!-- separate module: if WebGL or the module fails, the links still work -->
-  <script type="module" src="background.js?v=6"></script>
+  <script type="module" src="background.js?v=7"></script>
 </body>
 </html>

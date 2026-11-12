@@ -1,6 +1,6 @@
 # Chaynikin Links
 
-A static one-page site with a glowing 3D chocolate bar in a detailed black-and-gold wrapper, floating over a WebGL scene of drifting chocolate, cocoa beans, hazelnuts and gold foil above a lake of molten chocolate. The background blurs with distance like frosted glass. The links to TikTok, Instagram, GitHub, VK and Telegram, plus an email piece, are pressed into the bar's pieces: tap a piece to open it, drag or swipe (or use the arrow keys) to turn the bar. The email piece opens a short form that hands off to the visitor's mail app.
+A static one-page site with a glowing chocolate bar in a detailed black-and-gold wrapper, floating over a WebGL scene of drifting chocolate, cocoa beans, hazelnuts and gold foil above a lake of molten chocolate. The background blurs with distance like frosted glass. When the page opens, the wrapped bar turns over, cracks and breaks into six pieces, one each for TikTok, Instagram, GitHub, VK, Telegram and email. The pieces stay put (they can't be turned); tap one to open its link. Tapping during the entrance skips ahead, and visitors who prefer reduced motion see the broken pieces straight away. The email piece opens a short form that hands off to the visitor's mail app.
 
 Set your profile URLs and email address in the `CONFIG` block at the top of `script.js`.
 

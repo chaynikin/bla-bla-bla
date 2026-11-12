@@ -16,43 +16,89 @@ const EMAIL_ICON =
 
 const dialog = document.getElementById("emailDialog");
 
-// --- chocolate pieces: 3 × 6, links in the two middle rows ---
-const pieces = document.getElementById("pieces");
+// --- the bar: 2 × 3 chocolate pieces, one link each ---
+const stage = document.getElementById("stage");
+const bar = document.getElementById("bar");
+const COLS = 2;
+const ROWS = 3;
 const linkItems = [
   ...CONFIG.links.map((l) => ({ ...l, path: window.ICONS[l.id] })),
   { id: "email", label: "Email", url: `mailto:${CONFIG.email}`, path: EMAIL_ICON },
 ];
-const FIRST_LINK_SLOT = 6;
 
-for (let i = 0; i < 18; i++) {
-  const item = linkItems[i - FIRST_LINK_SLOT];
-  if (!item) {
-    const p = document.createElement("div");
-    p.className = "piece";
-    p.setAttribute("aria-hidden", "true");
-    pieces.appendChild(p);
-    continue;
-  }
+// seeded, so the broken pieces always land in the same tidy scatter
+function mulberry32(seed) {
+  return () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const rand = mulberry32(1112);
+const spread = (n) => (rand() * 2 - 1) * n;
+
+const chunks = linkItems.map((item, i) => {
+  const c = i % COLS;
+  const r = Math.floor(i / COLS);
+  const outer = { t: r === 0, r: c === COLS - 1, b: r === ROWS - 1, l: c === 0 };
+
   const a = document.createElement("a");
-  a.className = `piece link ${item.id}`;
+  a.className = `chunk ${item.id}`;
   a.href = item.url;
   a.title = item.label;
   a.setAttribute("aria-label", item.id === "email" ? "Send me an email" : item.label);
   a.draggable = false;
-  if (item.id !== "email") {
-    a.target = "_blank";
-    a.rel = "noopener noreferrer";
-  } else {
+  if (item.id === "email") {
     a.addEventListener("click", (e) => {
       if (typeof dialog.showModal !== "function") return; // plain mailto fallback
       e.preventDefault();
       dialog.showModal();
     });
+  } else {
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
   }
+
+  a.style.setProperty("--c", c);
+  a.style.setProperty("--r", r);
+  // flat lip along the bar's outer rim, half a groove where it snapped
+  a.style.setProperty("--pad", ["t", "r", "b", "l"].map((s) => (outer[s] ? "12px" : "4px")).join(" "));
+  a.style.setProperty(
+    "--rad",
+    [outer.t && outer.l, outer.t && outer.r, outer.b && outer.r, outer.b && outer.l]
+      .map((o) => (o ? "10px" : "2px"))
+      .join(" ")
+  );
   a.innerHTML =
-    `<span class="mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${item.path}"/></svg></span>`;
-  pieces.appendChild(a);
-}
+    `<span class="cf"><span class="tile"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${item.path}"/></svg></span></span>` +
+    `<span class="cb"></span>` +
+    ["l", "r", "t", "b"].map((s) => `<span class="ce ${s}${outer[s] ? "" : " broke"}"></span>`).join("");
+  bar.appendChild(a);
+
+  return {
+    el: a,
+    // where the piece comes to rest: pushed apart, tilted so the broken edges show
+    rest: {
+      x: (c === 0 ? -1 : 1) * 22 + spread(5),
+      y: (r - 1) * 36 + spread(5),
+      rx: (r === 0 ? 8 : r === ROWS - 1 ? -8 : 0) + spread(2),
+      ry: (c === 0 ? -10 : 10) + spread(2),
+      rz: spread(6),
+    },
+    tumble: { x: spread(35), y: spread(35), z: spread(25) },
+    delay: i * 30,
+    phase: rand() * Math.PI * 2,
+    lift: 0,
+  };
+});
+
+const cracks = ["v", "h1", "h2"].map((k) => {
+  const s = document.createElement("span");
+  s.className = `crack ${k}`;
+  bar.appendChild(s);
+  return s;
+});
 
 // --- wrapper details: guilloché, foil crimp, barcode ---
 (function drawWrapper() {
@@ -129,125 +175,161 @@ form.addEventListener("submit", () => {
   form.reset();
 });
 
-// --- rotation: drag with inertia, arrow keys, idle sway back to the front ---
-const stage = document.getElementById("stage");
-const bar = document.getElementById("bar");
+// --- entrance: the wrapped bar turns over, cracks and breaks into its six pieces ---
+const wrapperEl = bar.querySelector(".back");
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const hoverable = window.matchMedia("(hover: hover)");
+const FOCUS = window.CSS && CSS.supports("selector(:focus-visible)") ? ":focus-visible" : ":focus";
+const D = parseFloat(getComputedStyle(bar).getPropertyValue("--d")) || 26;
 
-let rx = -8, ry = 20;   // degrees
-let vx = 0, vy = 0;     // degrees per frame
-let lastInteraction = -Infinity;
-let hovering = false;
-const IDLE_MS = 2200;
-const DRAG_THRESHOLD = 6; // px; below this a press counts as a tap on a link
+// ms after the first frame
+const T = { appear: 600, flip: 750, flipEnd: 1500, burst: 1820, end: 2800 };
+const POSE = {
+  start: { x: 0, y: -60, z: -520, rx: 30, ry: 115, rz: -10 },
+  wrapped: { x: 0, y: 0, z: 0, rx: -8, ry: 162, rz: 2 },
+  front: { x: 0, y: 0, z: 0, rx: -5, ry: 360, rz: 0 },
+  flat: { x: 0, y: 0, z: 0, rx: 0, ry: 360, rz: 0 },
+};
+const LOOSEN = 0.06; // how far the pieces part while the bar cracks
 
-// pointer state; capture starts only once the press turns into a drag
-let ptr = null;
-let suppressClick = false;
+const clamp01 = (t) => Math.min(1, Math.max(0, t));
+const lerp = (a, b, t) => a + (b - a) * t;
+const easeOutCubic = (t) => 1 - (1 - t) ** 3;
+const easeInOutCubic = (t) => (t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2);
+const easeOutBack = (t) => 1 + 2.6 * (t - 1) ** 3 + 1.6 * (t - 1) ** 2;
+const mix = (a, b, t) => Object.fromEntries(Object.keys(a).map((k) => [k, lerp(a[k], b[k], t)]));
+const toCss = (p, s = 1) =>
+  `translate3d(${p.x.toFixed(2)}px, ${p.y.toFixed(2)}px, ${p.z.toFixed(2)}px) ` +
+  `rotateX(${p.rx.toFixed(2)}deg) rotateY(${p.ry.toFixed(2)}deg) rotateZ(${p.rz.toFixed(2)}deg)` +
+  (s !== 1 ? ` scale(${s.toFixed(3)})` : "");
 
-stage.addEventListener("pointerdown", (e) => {
-  if (e.button !== 0) return;
-  ptr = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, moved: false };
-  suppressClick = false;
-  vx = vy = 0;
-  lastInteraction = performance.now();
-});
-
-stage.addEventListener("pointermove", (e) => {
-  if (!ptr || e.pointerId !== ptr.id) return;
-  if (!ptr.moved) {
-    if (Math.hypot(e.clientX - ptr.x0, e.clientY - ptr.y0) < DRAG_THRESHOLD) return;
-    ptr.moved = true;
-    stage.setPointerCapture(e.pointerId);
-    stage.classList.add("dragging");
+function barPose(e) {
+  if (e < T.appear) return mix(POSE.start, POSE.wrapped, easeOutCubic(e / T.appear));
+  if (e < T.flip) return POSE.wrapped;
+  if (e < T.flipEnd) return mix(POSE.wrapped, POSE.front, easeInOutCubic((e - T.flip) / (T.flipEnd - T.flip)));
+  if (e < T.burst) {
+    // the crack: a short, fading shudder
+    const k = (e - T.flipEnd) / (T.burst - T.flipEnd);
+    return { ...POSE.front, rz: Math.sin(k * Math.PI * 12) * 1.6 * (1 - 0.6 * k) };
   }
-  const dx = e.clientX - ptr.x;
-  const dy = e.clientY - ptr.y;
-  ptr.x = e.clientX;
-  ptr.y = e.clientY;
-  vy = dx * 0.5;
-  vx = -dy * 0.5;
-  ry += vy;
-  rx += vx;
-  lastInteraction = performance.now();
-});
-
-function endPointer(e) {
-  if (!ptr || e.pointerId !== ptr.id) return;
-  if (ptr.moved) suppressClick = true;
-  ptr = null;
-  stage.classList.remove("dragging");
-  lastInteraction = performance.now();
+  return mix(POSE.front, POSE.flat, easeOutCubic(clamp01((e - T.burst) / (T.end - T.burst))));
 }
-stage.addEventListener("pointerup", endPointer);
-stage.addEventListener("pointercancel", endPointer);
 
-// a drag that ends over a piece must not open its link
-stage.addEventListener("click", (e) => {
-  if (!suppressClick) return;
-  suppressClick = false;
-  e.preventDefault();
-  e.stopPropagation();
-}, true);
-
-bar.addEventListener("pointerenter", () => (hovering = true));
-bar.addEventListener("pointerleave", () => (hovering = false));
-
-// tabbing onto a link turns the bar back to the front right away
-stage.addEventListener("focusin", (e) => {
-  if (e.target.closest(".link")) {
-    vx = vy = 0;
-    lastInteraction = -Infinity;
+function chunkPose(ch, e) {
+  const { rest, tumble } = ch;
+  if (e < T.burst) {
+    const k = e < T.flipEnd ? 0 : LOOSEN * easeOutCubic((e - T.flipEnd) / (T.burst - T.flipEnd));
+    return { x: rest.x * k, y: rest.y * k, z: 0, rx: 0, ry: 0, rz: 0 };
   }
-});
-
-stage.addEventListener("keydown", (e) => {
-  const step = 15;
-  const keys = {
-    ArrowLeft: () => (ry -= step),
-    ArrowRight: () => (ry += step),
-    ArrowUp: () => (rx += step),
-    ArrowDown: () => (rx -= step),
+  // fly apart with a little overshoot, popping towards the viewer and tumbling on the way
+  const t = clamp01((e - T.burst - ch.delay) / (T.end - T.burst - 150));
+  const p = lerp(LOOSEN, 1, easeOutBack(t));
+  const q = easeOutCubic(t);
+  const arc = Math.sin(Math.PI * t);
+  return {
+    x: rest.x * p,
+    y: rest.y * p,
+    z: 90 * arc,
+    rx: rest.rx * q + tumble.x * arc,
+    ry: rest.ry * q + tumble.y * arc,
+    rz: rest.rz * q + tumble.z * arc,
   };
-  if (keys[e.key]) {
+}
+
+function spawnCrumbs() {
+  const W = bar.offsetWidth;
+  const H = bar.offsetHeight;
+  for (let i = 0; i < 34; i++) {
+    const s = document.createElement("span");
+    s.className = "crumb";
+    // along the three break lines
+    const k = i % 3;
+    const x = k === 0 ? W / 2 : Math.random() * W;
+    const y = k === 0 ? Math.random() * H : (H / 3) * k;
+    const size = 2 + Math.random() * 5;
+    s.style.cssText = `left:${x}px;top:${y}px;width:${size}px;height:${size * (0.6 + Math.random() * 0.6)}px`;
+    bar.appendChild(s);
+    const dx = (x - W / 2) * 0.5 + (Math.random() - 0.5) * 140;
+    const up = -30 - Math.random() * 90;
+    const fall = 220 + Math.random() * 260;
+    const dz = 40 + Math.random() * 160;
+    const spin = (Math.random() - 0.5) * 900;
+    s.animate(
+      [
+        { transform: `translate3d(0, 0, ${D / 2 + 1}px) rotate(0deg)`, opacity: 1 },
+        { transform: `translate3d(${dx / 2}px, ${up}px, ${dz * 0.6}px) rotate(${spin / 2}deg)`, opacity: 1, offset: 0.35 },
+        { transform: `translate3d(${dx}px, ${fall}px, ${dz}px) rotate(${spin}deg)`, opacity: 0 },
+      ],
+      { duration: 900 + Math.random() * 600, easing: "cubic-bezier(.3,.6,.5,1)" }
+    ).finished.then(() => s.remove(), () => s.remove());
+  }
+}
+
+let start = null;
+let elapsed = 0;
+let broken = false;
+let skipPending = false;
+
+function breakApart() {
+  broken = true;
+  stage.classList.add("broken");
+  wrapperEl.style.visibility = "hidden";
+  if (!reduceMotion) spawnCrumbs();
+}
+
+function skipIntro() {
+  if (start === null) skipPending = true;
+  else if (elapsed < T.burst) start = performance.now() - T.burst;
+}
+
+// during the entrance a tap just skips ahead; the links work once the pieces fly apart
+stage.addEventListener(
+  "click",
+  (e) => {
+    if (elapsed >= T.burst + 250) return;
     e.preventDefault();
-    keys[e.key]();
-    vx = vy = 0;
-    lastInteraction = performance.now();
-  }
-});
+    e.stopPropagation();
+    skipIntro();
+  },
+  true
+);
+stage.addEventListener("focusin", skipIntro);
 
-function render() {
-  bar.style.transform = `rotateX(${rx}deg) rotateY(${ry}deg)`;
-  // slide the highlight across the front as the bar turns
-  const sheen = 50 + Math.sin((ry * Math.PI) / 180) * 70 + Math.sin((rx * Math.PI) / 180) * 30;
+function frame(now) {
+  if (start === null) start = skipPending ? now - T.burst : now;
+  elapsed = reduceMotion ? T.end + 1 : now - start;
+  const e = elapsed;
+
+  if (!broken && e >= T.burst) breakApart();
+  stage.style.opacity = e < 450 ? easeOutCubic(e / 450).toFixed(3) : "1";
+
+  const bp = barPose(e);
+  bar.style.transform = toCss(bp);
+  const sheen = 50 + Math.sin((bp.ry * Math.PI) / 180) * 70 + Math.sin((bp.rx * Math.PI) / 180) * 30;
   bar.style.setProperty("--sheen", `${sheen.toFixed(1)}%`);
-}
 
-function nearestTurn(angle, offset) {
-  return Math.round((angle - offset) / 360) * 360 + offset;
-}
+  // crack lines run out along the grooves, glow, then fade as the pieces fly
+  const grow = clamp01((e - T.flipEnd) / 160);
+  const shine =
+    e < T.burst
+      ? clamp01((e - T.flipEnd) / 90) * (0.85 + 0.15 * Math.sin(e / 11))
+      : 1 - clamp01((e - T.burst) / 260);
+  cracks.forEach((s, i) => {
+    s.style.opacity = shine.toFixed(3);
+    s.style.transform = `translateZ(${D / 2 + 1}px) ${i === 0 ? "scaleY" : "scaleX"}(${grow.toFixed(3)})`;
+  });
 
-function tick(now) {
-  if (!ptr || !ptr.moved) {
-    rx += vx;
-    ry += vy;
-    vx *= 0.94;
-    vy *= 0.94;
-    if (Math.abs(vx) < 0.01) vx = 0;
-    if (Math.abs(vy) < 0.01) vy = 0;
-
-    // when idle, ease back to the front (where the links are) with a gentle sway
-    if (!vx && !vy && !ptr && now - lastInteraction > IDLE_MS) {
-      const sway = reduceMotion || hovering ? 0 : 1;
-      const tx = nearestTurn(rx, -8) + sway * Math.sin(now / 2300) * 5;
-      const ty = nearestTurn(ry, 0) + sway * Math.sin(now / 1700) * 16;
-      rx += (tx - rx) * 0.04;
-      ry += (ty - ry) * 0.04;
-    }
+  // once settled the pieces only bob gently; hover or focus lifts one towards you
+  const bob = reduceMotion ? 0 : clamp01((e - T.end) / 800);
+  for (const ch of chunks) {
+    const want = broken && ((hoverable.matches && ch.el.matches(":hover")) || ch.el.matches(FOCUS)) ? 1 : 0;
+    ch.lift += (want - ch.lift) * 0.2;
+    const p = chunkPose(ch, e);
+    p.y += Math.sin(now / 900 + ch.phase) * 3 * bob;
+    p.rz += Math.sin(now / 1300 + ch.phase) * 0.6 * bob;
+    p.z += ch.lift * 28;
+    ch.el.style.transform = toCss(p, 1 + ch.lift * 0.04);
   }
-  render();
-  requestAnimationFrame(tick);
+  requestAnimationFrame(frame);
 }
-render();
-requestAnimationFrame(tick);
+requestAnimationFrame(frame);
