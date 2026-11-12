@@ -2,7 +2,7 @@
 const CONFIG = {
   email: "dlukin@yuman.ru",
   links: [
-    { id: "tiktok",    label: "TikTok",    url: "https://www.tiktok.com/chaynikin" },
+    { id: "tiktok",    label: "TikTok",    url: "https://www.tiktok.com/@chaynikin" },
     { id: "instagram", label: "Instagram", url: "https://www.instagram.com/chaynikin.d?cplk=MWZ4cWIydnRmcGk1aQ==" },
     { id: "github",    label: "GitHub",    url: "https://github.com/chaynikin" },
     { id: "vk",        label: "VK",        url: "https://vk.com/chaynikin" },
