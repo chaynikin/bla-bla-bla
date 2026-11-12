@@ -8,18 +8,13 @@
 }
 
 :root {
-  --w: 252px;
-  --h: 472px;
-  --d: 26px;
-  --cw: calc(var(--w) / 2); /* one piece: 2 × 3 per bar */
-  --ch: calc(var(--h) / 3);
-  --mold: #26120a;
-  --choc-hi: #7a4a2e;
-  --choc: #55301b;
-  --choc-lo: #331a0c;
-  --paper: #120805;
+  --px: 3; /* one "pixel" in CSS px: background, heading, icons and crumbs */
+  --tile-color: #7a4022;
+  --icon-color: #f3dbb5;
+  --tile-size: 132px;
+  --tile-depth: 20px;
+  --tile-round: 10px;
   --cream: #eadbc6;
-  --gold: #d8ad5a;
   color-scheme: dark;
 }
 
@@ -35,10 +30,12 @@ body {
   overflow-x: hidden;
 }
 
-/* WebGL background; fades in over the CSS gradient once the first frame renders */
+/* WebGL background: rendered at 1/--px resolution and scaled up with hard edges
+   (background.js sets the exact size); fades in once the first frame renders */
 #bg {
   position: fixed;
-  inset: 0;
+  left: 0;
+  top: 0;
   width: 100%;
   height: 100%;
   z-index: 0;
@@ -46,10 +43,12 @@ body {
   opacity: 0;
   transition: opacity 1.2s ease;
   pointer-events: none;
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
 }
 #bg.ready { opacity: 1; }
 
-/* vignette keeps the bar the brightest thing on screen */
+/* vignette keeps the tiles the brightest thing on screen */
 body::after {
   content: "";
   position: fixed;
@@ -85,10 +84,27 @@ h1 {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  filter: drop-shadow(0 0 16px rgba(255, 150, 80, 0.22));
+  /* hard pixel shadow plus a soft glow */
+  filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.55)) drop-shadow(0 0 16px rgba(255, 150, 80, 0.22));
+}
+/* pixelated heading drawn by script.js; the text stays for screen readers */
+h1.px { background: none; }
+h1.px .title-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.title-px {
+  display: block;
+  margin: 0 auto;
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
 }
 
-/* ---------- 3D stage ---------- */
+/* ---------- stage ---------- */
 
 .stage {
   position: relative;
@@ -102,7 +118,7 @@ h1 {
   opacity: 0; /* faded in by script.js as the entrance starts */
 }
 
-/* warm halo behind the bar; a filter on the bar itself would flatten the 3D */
+/* warm halo behind the tiles; a filter on the tiles themselves would flatten the 3D */
 .glow {
   position: absolute;
   width: 380px;
@@ -117,7 +133,7 @@ h1 {
   0%, 100% { opacity: 0.7; transform: scale(0.96); }
   50%      { opacity: 1;   transform: scale(1.04); }
 }
-/* flare as the bar breaks */
+/* flare as the slab breaks */
 .stage.broken .glow { animation: flare 1.2s ease-out, pulse 4.5s ease-in-out 1.2s infinite; }
 @keyframes flare {
   0%   { opacity: 1;   transform: scale(1.3); filter: blur(22px) brightness(1.7); }
@@ -141,202 +157,104 @@ h1 {
 .scaler { transform-style: preserve-3d; pointer-events: none; }
 
 .bar {
-  --sheen: 50%;
   position: relative;
   display: block;
-  width: var(--w);
-  height: var(--h);
+  width: calc(var(--tile-size) * 2);
+  height: calc(var(--tile-size) * 3);
   transform-style: preserve-3d;
   will-change: transform;
 }
 
-.face {
+/* ---------- tiles: smooth, two colours, one link each ---------- */
+
+.tile {
+  --fill: var(--tile-color);
+  --ink: var(--icon-color);
+  /* 1 = rounded corner; only the slab's outer corners until it breaks */
+  --k-tl: var(--o-tl);
+  --k-tr: var(--o-tr);
+  --k-br: var(--o-br);
+  --k-bl: var(--o-bl);
   position: absolute;
-  pointer-events: auto;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-}
-
-/* ---------- back: wrapper (seen while the bar turns over) ---------- */
-
-.back {
-  width: var(--w);
-  height: var(--h);
-  border-radius: 10px;
-  /* 1px behind the pieces' undersides so it wins from behind */
-  transform: rotateY(180deg) translateZ(calc(var(--d) / 2 + 1px));
-  overflow: hidden;
-  background: var(--paper);
-  box-shadow: 0 0 30px rgba(255, 130, 50, 0.2);
-}
-.wrap { display: block; width: 100%; height: 100%; }
-
-/* moving highlight, driven by --sheen from script.js */
-.back::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background: linear-gradient(
-    112deg,
-    transparent calc(var(--sheen) - 22%),
-    rgba(255, 228, 196, 0.13) var(--sheen),
-    transparent calc(var(--sheen) + 22%)
-  );
-  mix-blend-mode: screen;
-}
-
-/* ---------- chocolate pieces (one link each) ---------- */
-
-.chunk {
-  --brand: #fff;
-  position: absolute;
-  left: calc(var(--cw) * var(--c));
-  top: calc(var(--ch) * var(--r));
-  width: var(--cw);
-  height: var(--ch);
+  left: calc(var(--tile-size) * var(--col));
+  top: calc(var(--tile-size) * var(--row));
+  width: var(--tile-size);
+  height: var(--tile-size);
   transform-style: preserve-3d;
   pointer-events: none; /* see .scaler */
   outline: none;
-  text-decoration: none;
   -webkit-tap-highlight-color: transparent;
 }
-.chunk > span {
-  position: absolute;
-  display: block;
+.stage.broken .tile { --k-tl: 1; --k-tr: 1; --k-br: 1; --k-bl: 1; }
+
+/* hover and focus swap the two colours */
+.stage.broken .tile:focus-visible,
+.stage.broken .tile:active { --fill: var(--icon-color); --ink: var(--tile-color); }
+@media (hover: hover) {
+  .stage.broken .tile:hover { --fill: var(--icon-color); --ink: var(--tile-color); }
+}
+
+.tile > span {
+  position: absolute; /* blockified, so .tf can still be a grid */
   pointer-events: auto;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    border-radius 0.6s ease,
+    top 0.6s ease,
+    right 0.6s ease,
+    bottom 0.6s ease,
+    left 0.6s ease;
 }
-.chunk.tiktok    { --brand: #25f4ee; }
-.chunk.instagram { --brand: #f0447d; }
-.chunk.github    { --brand: #e6edf3; }
-.chunk.vk        { --brand: #3d8bff; }
-.chunk.telegram  { --brand: #2aa9ea; }
-.chunk.email     { --brand: #ffc46b; }
 
-/* top: mould lip and groove around a bevelled tile */
-.cf {
+.tf {
   inset: 0;
-  padding: var(--pad);
-  border-radius: var(--rad);
-  background: var(--mold);
-  transform: translateZ(calc(var(--d) / 2));
-  transition: box-shadow 0.8s ease;
-}
-.stage.broken .cf { box-shadow: 0 0 26px rgba(255, 130, 50, 0.16); }
-
-.tile {
-  position: relative;
   display: grid;
   place-items: center;
-  width: 100%;
-  height: 100%;
-  border-radius: 8px;
-  background: linear-gradient(145deg, var(--choc-hi) 0%, var(--choc) 42%, var(--choc-lo) 100%);
-  box-shadow:
-    inset 2px 2px 1px rgba(255, 216, 176, 0.22),
-    inset -3px -3px 2px rgba(0, 0, 0, 0.5),
-    0 2px 3px rgba(0, 0, 0, 0.6);
-  transition: box-shadow 0.25s ease;
+  border-radius:
+    calc(var(--k-tl) * var(--tile-round)) calc(var(--k-tr) * var(--tile-round))
+    calc(var(--k-br) * var(--tile-round)) calc(var(--k-bl) * var(--tile-round));
+  background-color: var(--fill);
+  color: var(--ink);
+  transform: translateZ(calc(var(--tile-depth) / 2));
 }
-/* raised plateau */
-.tile::before {
-  content: "";
-  position: absolute;
-  inset: 11%;
-  border-radius: 6px;
-  background:
-    radial-gradient(ellipse at 30% 20%, rgba(255, 210, 170, 0.08), transparent 60%),
-    linear-gradient(145deg, #6a3d24, #4a2715);
-  box-shadow:
-    inset 1px 1px 1px rgba(255, 216, 176, 0.18),
-    inset -1px -1px 2px rgba(0, 0, 0, 0.4),
-    0 0 0 1px rgba(0, 0, 0, 0.18);
-}
-/* fine embossed frame on the plateau */
-.tile::after {
-  content: "";
-  position: absolute;
-  inset: calc(11% + 7px);
-  border-radius: 4px;
-  border: 1px solid rgba(0, 0, 0, 0.3);
-  box-shadow: 0 1px 0 rgba(255, 214, 170, 0.1), inset 0 1px 0 rgba(255, 214, 170, 0.1);
-}
-/* icon engraved into the chocolate until hovered */
-.tile svg {
-  position: relative;
-  z-index: 1;
-  width: 40px;
-  height: 40px;
-  fill: #1f0e06;
-  filter: drop-shadow(0 1px 0 rgba(255, 214, 170, 0.22));
-  transition: fill 0.25s ease, filter 0.25s ease;
-}
+.tf svg { display: block; fill: currentColor; }
 
-.stage.broken .chunk:focus-visible .tile,
-.stage.broken .chunk:active .tile {
-  box-shadow:
-    inset 2px 2px 1px rgba(255, 216, 176, 0.25),
-    inset -3px -3px 2px rgba(0, 0, 0, 0.5),
-    0 0 0 1.5px var(--brand),
-    0 0 22px var(--brand);
-}
-.stage.broken .chunk:focus-visible svg,
-.stage.broken .chunk:active svg {
-  fill: var(--brand);
-  filter: drop-shadow(0 0 4px var(--brand)) drop-shadow(0 0 10px var(--brand));
-}
-@media (hover: hover) {
-  .stage.broken .chunk:hover .tile {
-    box-shadow:
-      inset 2px 2px 1px rgba(255, 216, 176, 0.25),
-      inset -3px -3px 2px rgba(0, 0, 0, 0.5),
-      0 0 0 1.5px var(--brand),
-      0 0 22px var(--brand);
-  }
-  .stage.broken .chunk:hover svg {
-    fill: var(--brand);
-    filter: drop-shadow(0 0 4px var(--brand)) drop-shadow(0 0 10px var(--brand));
-  }
-}
-
-/* underside: only needed once the pieces move apart */
-.cb {
+/* back is mirrored, so its corners swap left and right */
+.tb {
   inset: 0;
-  border-radius: var(--rad);
-  background: linear-gradient(145deg, #3b1f10, #24110a);
-  transform: rotateY(180deg) translateZ(calc(var(--d) / 2));
-  visibility: hidden;
+  border-radius:
+    calc(var(--k-tr) * var(--tile-round)) calc(var(--k-tl) * var(--tile-round))
+    calc(var(--k-bl) * var(--tile-round)) calc(var(--k-br) * var(--tile-round));
+  background: linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45)) var(--fill);
+  transform: rotateY(180deg) translateZ(calc(var(--tile-depth) / 2));
 }
-.stage.broken .cb { visibility: visible; }
 
-/* sides: smooth where the mould was, rough where the bar snapped */
-.ce.l, .ce.r {
-  top: 0;
-  left: calc(50% - var(--d) / 2);
-  width: var(--d);
-  height: 100%;
-  background: linear-gradient(90deg, var(--choc-lo), var(--choc) 50%, var(--choc-lo));
+/* sides: the same colour in shade, stopping short of rounded corners */
+.te { background: linear-gradient(rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.3)) var(--fill); }
+.te.l, .te.r { left: calc(50% - var(--tile-depth) / 2); width: var(--tile-depth); }
+.te.t, .te.b { top: calc(50% - var(--tile-depth) / 2); height: var(--tile-depth); }
+.te.l {
+  top: calc(var(--k-tl) * var(--tile-round));
+  bottom: calc(var(--k-bl) * var(--tile-round));
+  transform: rotateY(-90deg) translateZ(calc(var(--tile-size) / 2));
 }
-.ce.t, .ce.b {
-  left: 0;
-  top: calc(50% - var(--d) / 2);
-  width: 100%;
-  height: var(--d);
-  background: linear-gradient(var(--choc-lo), var(--choc) 50%, var(--choc-lo));
+.te.r {
+  top: calc(var(--k-tr) * var(--tile-round));
+  bottom: calc(var(--k-br) * var(--tile-round));
+  transform: rotateY(90deg) translateZ(calc(var(--tile-size) / 2));
 }
-.ce.l { transform: rotateY(-90deg) translateZ(calc(var(--cw) / 2)); }
-.ce.r { transform: rotateY(90deg) translateZ(calc(var(--cw) / 2)); }
-.ce.t { transform: rotateX(90deg) translateZ(calc(var(--ch) / 2)); }
-.ce.b { transform: rotateX(-90deg) translateZ(calc(var(--ch) / 2)); }
-.ce.broke {
-  background:
-    radial-gradient(circle at 30% 40%, rgba(255, 214, 170, 0.2) 0 0.8px, transparent 1.6px) 0 0 / 6px 5px,
-    radial-gradient(circle at 70% 70%, rgba(0, 0, 0, 0.45) 0 1px, transparent 2px) 0 0 / 5px 7px,
-    radial-gradient(circle at 40% 80%, rgba(255, 214, 170, 0.12) 0 1.2px, transparent 2.2px) 0 0 / 9px 8px,
-    #5e3520;
+.te.t {
+  left: calc(var(--k-tl) * var(--tile-round));
+  right: calc(var(--k-tr) * var(--tile-round));
+  transform: rotateX(90deg) translateZ(calc(var(--tile-size) / 2));
+}
+.te.b {
+  left: calc(var(--k-bl) * var(--tile-round));
+  right: calc(var(--k-br) * var(--tile-round));
+  transform: rotateX(-90deg) translateZ(calc(var(--tile-size) / 2));
 }
 
 /* ---------- the break ---------- */
@@ -345,57 +263,66 @@ h1 {
   position: absolute;
   pointer-events: none;
   opacity: 0;
-  border-radius: 2px;
-  background: #ffd9a8;
-  box-shadow: 0 0 6px 1px rgba(255, 170, 90, 0.9), 0 0 18px 5px rgba(255, 110, 40, 0.5);
+  background: var(--icon-color);
+  box-shadow: 0 0 8px 1px rgba(255, 200, 140, 0.6);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }
-.crack.v { left: calc(var(--cw) - 1px); top: 0; width: 2px; height: 100%; }
-.crack.h1, .crack.h2 { left: 0; width: 100%; height: 2px; }
-.crack.h1 { top: calc(var(--ch) - 1px); }
-.crack.h2 { top: calc(var(--ch) * 2 - 1px); }
-
-.crumb {
-  position: absolute;
-  pointer-events: none;
-  border-radius: 40% 55% 45% 60%;
-  background: radial-gradient(circle at 30% 30%, #8a5533, #3b1d0e 70%);
+.crack.v {
+  left: calc(var(--tile-size) - var(--px) * 0.5px);
+  top: 0;
+  width: calc(var(--px) * 1px);
+  height: 100%;
 }
+.crack.h1, .crack.h2 { left: 0; width: 100%; height: calc(var(--px) * 1px); }
+.crack.h1 { top: calc(var(--tile-size) - var(--px) * 0.5px); }
+.crack.h2 { top: calc(var(--tile-size) * 2 - var(--px) * 0.5px); }
+
+.crumb { position: absolute; pointer-events: none; background: var(--tile-color); }
+.crumb.alt { background: var(--icon-color); }
 
 /* ---------- email dialog ---------- */
 
 .email-dialog {
   width: min(92vw, 440px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
+  border: 3px solid var(--tile-color);
+  border-radius: 0;
   padding: 1.5rem;
   color: var(--cream);
   background: #1a0d07;
-  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(255, 150, 70, 0.1);
+  box-shadow: 9px 9px 0 rgba(0, 0, 0, 0.6);
 }
-.email-dialog::backdrop { background: rgba(5, 2, 1, 0.75); backdrop-filter: blur(4px); }
+.email-dialog::backdrop { background: rgba(5, 2, 1, 0.75); }
 .email-dialog h2 { margin: 0 0 1rem; }
 .email-dialog label { display: grid; gap: 0.35rem; margin-bottom: 0.9rem; font-size: 0.9rem; }
 .email-dialog input, .email-dialog textarea {
   font: inherit;
   color: inherit;
   padding: 0.6rem 0.75rem;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 0;
+  border: 3px solid rgba(255, 255, 255, 0.13);
   background: rgba(0, 0, 0, 0.35);
   resize: vertical;
 }
-.email-dialog input:focus, .email-dialog textarea:focus { outline: 2px solid #c0603c; border-color: transparent; }
+.email-dialog input:focus, .email-dialog textarea:focus { outline: none; border-color: var(--icon-color); }
 .address { font-size: 0.85rem; opacity: 0.75; margin: 0 0 1rem; }
-.address a { color: #e3a57c; }
-.actions { display: flex; justify-content: flex-end; gap: 0.6rem; }
-.actions button { font: inherit; padding: 0.6rem 1.1rem; border-radius: 10px; border: 0; cursor: pointer; }
-.ghost { background: transparent; color: var(--cream); border: 1px solid rgba(255, 255, 255, 0.2) !important; }
-.primary { background: #a8452f; color: #fff; font-weight: 600; }
+.address a { color: var(--icon-color); }
+.actions { display: flex; justify-content: flex-end; gap: 0.75rem; }
+.actions button {
+  font: inherit;
+  padding: 0.6rem 1.1rem;
+  border-radius: 0;
+  border: 0;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.6);
+}
+.actions button:active { transform: translate(3px, 3px); box-shadow: none; }
+.actions .ghost { background: transparent; color: var(--cream); border: 3px solid rgba(255, 255, 255, 0.2); }
+.actions .primary { background: var(--tile-color); color: var(--icon-color); font-weight: 600; }
 
 @media (prefers-reduced-motion: reduce) {
   .glow, .stage.broken .glow { animation: none; }
+  .tile > span { transition: background-color 0.2s ease, color 0.2s ease; }
 }
 
 /* ---------- small screens ---------- */

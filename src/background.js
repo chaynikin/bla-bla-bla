@@ -1,5 +1,6 @@
 // 3D background: floating chocolate, cocoa beans, hazelnuts and gold foil over
-// a lake of molten chocolate. Bundled to /background.js with `npm run build`.
+// a lake of molten chocolate, rendered at low resolution for a pixelated look.
+// Bundled to /background.js with `npm run build`.
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
@@ -16,13 +17,15 @@ const density = small ? 0.55 : 1;
 
 let renderer;
 try {
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
 } catch (err) {
   // no WebGL: the CSS gradient on <body> stays as the background
   canvas.remove();
   throw err;
 }
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, small ? 1.5 : 1.75));
+renderer.setPixelRatio(1);
+// size of one background pixel in CSS px, shared with style.css (--px)
+const PIXEL = Math.max(1, Math.round(parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--px")) || 3));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.78;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -268,7 +271,7 @@ const dustMat = new THREE.ShaderMaterial({
       // dust isn't in the depth-of-field pass, so it defocuses itself:
       // distant motes grow into soft, dim bokeh discs
       vBlur = clamp((-mv.z - 10.0) / 30.0, 0.0, 1.0);
-      gl_PointSize = (2.0 + seed * 5.0) * uScale * (30.0 / -mv.z) * (1.0 + vBlur * 3.0);
+      gl_PointSize = max(1.0, (2.0 + seed * 5.0) * uScale * (30.0 / -mv.z) * (1.0 + vBlur * 3.0));
       vAlpha = (0.35 + 0.65 * abs(sin(uTime * (0.6 + seed) + seed * 50.0)))
              * smoothstep(60.0, 8.0, -mv.z) / (1.0 + vBlur * 4.0);
       vSeed = seed;
@@ -389,17 +392,21 @@ composer.addPass(fxPass);
 composer.addPass(new OutputPass());
 
 function resize() {
-  const w = window.innerWidth;
-  const h = window.innerHeight;
+  // one render pixel per PIXEL × PIXEL CSS pixels; CSS scales it up with hard edges
+  const w = Math.ceil(window.innerWidth / PIXEL);
+  const h = Math.ceil(window.innerHeight / PIXEL);
   renderer.setSize(w, h, false);
-  composer.setPixelRatio(renderer.getPixelRatio());
+  canvas.style.width = `${w * PIXEL}px`;
+  canvas.style.height = `${h * PIXEL}px`;
+  composer.setPixelRatio(1);
   composer.setSize(w, h);
   camera.aspect = w / h;
   // narrow screens: pull back so the scene still fills the sides
   camera.fov = w / h < 0.8 ? 60 : 45;
   camera.updateProjectionMatrix();
-  frosted.material.uniforms.uMaxRadius.value = 14 * renderer.getPixelRatio() * Math.min(1.4, h / 900);
-  dustMat.uniforms.uScale.value = renderer.getPixelRatio() * (h / 900);
+  const scale = window.innerHeight / 900 / PIXEL;
+  frosted.material.uniforms.uMaxRadius.value = 14 * Math.min(1.4 / PIXEL, scale);
+  dustMat.uniforms.uScale.value = scale;
 }
 window.addEventListener("resize", () => {
   resize();
@@ -408,27 +415,6 @@ window.addEventListener("resize", () => {
 resize();
 
 const start = performance.now();
-
-// the depth-of-field pass is the costly part; on slow devices render the
-// background at a lower resolution (it's blurred anyway) instead of stuttering
-let lastFrame = 0;
-let slowFrames = 0;
-let sampled = 0;
-function adaptQuality() {
-  const now = performance.now();
-  const dt = now - lastFrame;
-  lastFrame = now;
-  if (dt > 200) return; // tab was hidden or first frame
-  sampled++;
-  if (dt > 28) slowFrames++;
-  if (sampled < 90) return;
-  const ratio = renderer.getPixelRatio();
-  if (slowFrames > 45 && ratio > 0.6) {
-    renderer.setPixelRatio(Math.max(0.6, ratio * 0.75));
-    resize();
-  }
-  sampled = slowFrames = 0;
-}
 
 function frame() {
   const t = reduceMotion ? 12 : (performance.now() - start) / 1000;
@@ -458,7 +444,6 @@ function frame() {
   glowLight.intensity = 34 + Math.sin(t * 1.4) * 6;
 
   composer.render();
-  adaptQuality();
 }
 
 if (reduceMotion) {
