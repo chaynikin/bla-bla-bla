@@ -1,0 +1,306 @@
+:root {
+  --w: 240px;
+  --h: 460px;
+  --d: 32px;
+  --choc: #5a3220;
+  --choc-light: #7a4a30;
+  --choc-dark: #3b1f13;
+  --cream: #f6e9d9;
+  --accent: #c8553d;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; min-height: 100%; }
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--cream);
+  background:
+    radial-gradient(circle at 50% 35%, #4a2a1c 0%, #24130c 55%, #140a06 100%) fixed;
+  min-height: 100vh;
+}
+
+main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 2rem 1rem 3rem;
+  min-height: 100vh;
+  justify-content: center;
+}
+
+.intro { text-align: center; }
+
+h1 {
+  margin: 0;
+  font-size: clamp(2rem, 6vw, 3.2rem);
+  letter-spacing: 0.02em;
+  background: linear-gradient(180deg, #ffe7c9, #d89a6a);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.hint { margin: 0.4rem 0 0; opacity: 0.65; font-size: 0.95rem; }
+
+/* ---------- 3D stage ---------- */
+
+.stage {
+  position: relative;
+  width: min(92vw, 520px);
+  height: 520px;
+  display: grid;
+  place-items: center;
+  perspective: 1200px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  border-radius: 24px;
+  outline: none;
+}
+.stage:focus-visible { box-shadow: 0 0 0 3px rgba(255, 210, 170, 0.5); }
+.stage.dragging { cursor: grabbing; }
+
+.scaler { transform-style: preserve-3d; }
+
+.bar {
+  position: relative;
+  width: var(--w);
+  height: var(--h);
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.face {
+  position: absolute;
+  backface-visibility: hidden;
+}
+
+.front, .back {
+  width: var(--w);
+  height: var(--h);
+  border-radius: 6px;
+}
+
+.front {
+  transform: translateZ(calc(var(--d) / 2));
+  background: var(--choc);
+  padding: 10px;
+  box-shadow: inset 0 0 0 2px var(--choc-dark);
+}
+
+.pieces {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(6, 1fr);
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+}
+
+.piece {
+  border-radius: 4px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.14), transparent 40%),
+    linear-gradient(315deg, rgba(0, 0, 0, 0.35), transparent 45%),
+    var(--choc-light);
+  box-shadow:
+    inset 3px 3px 0 rgba(255, 220, 190, 0.18),
+    inset -4px -4px 0 rgba(0, 0, 0, 0.35),
+    0 1px 0 rgba(0, 0, 0, 0.4);
+  position: relative;
+}
+.piece::after {
+  content: "";
+  position: absolute;
+  inset: 22%;
+  border-radius: 3px;
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.12), rgba(255, 255, 255, 0.06));
+}
+
+.back {
+  transform: rotateY(180deg) translateZ(calc(var(--d) / 2));
+  overflow: hidden;
+  background: #c0c4c8;
+}
+
+.foil {
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(115deg, #e9ecef 0 6px, #aeb4ba 6px 10px, #d7dbdf 10px 18px);
+}
+
+.wrapper {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 14%;
+  bottom: 0;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.18), transparent 50%),
+    linear-gradient(160deg, #b8402c, #7e1f17);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-top: 3px solid #e2b04a;
+  text-align: center;
+}
+.brand {
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-size: 3rem;
+  color: #fbe6c2;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+  transform: rotate(-8deg);
+}
+.sub { text-transform: uppercase; letter-spacing: 0.18em; font-size: 0.7rem; color: #f3d39a; }
+.weight {
+  position: absolute;
+  bottom: 14px;
+  font-size: 0.8rem;
+  color: #f3d39a;
+  opacity: 0.85;
+}
+
+.side {
+  width: var(--d);
+  height: var(--h);
+  left: calc((var(--w) - var(--d)) / 2);
+  background: linear-gradient(90deg, var(--choc-dark), var(--choc) 50%, #9aa0a6 50%, #c9cdd1);
+}
+.right { transform: rotateY(90deg) translateZ(calc(var(--w) / 2)); }
+.left  { transform: rotateY(-90deg) translateZ(calc(var(--w) / 2)); }
+/* the left side's local x axis runs back-to-front, so flip the split */
+.left { background: linear-gradient(90deg, #c9cdd1, #9aa0a6 50%, var(--choc) 50%, var(--choc-dark)); }
+
+.end {
+  width: var(--w);
+  height: var(--d);
+  top: calc((var(--h) - var(--d)) / 2);
+}
+.top {
+  transform: rotateX(90deg) translateZ(calc(var(--h) / 2));
+  background: linear-gradient(0deg, var(--choc-dark), var(--choc) 50%, #9aa0a6 50%, #c9cdd1);
+}
+.bottom {
+  transform: rotateX(-90deg) translateZ(calc(var(--h) / 2));
+  background: linear-gradient(0deg, #8c2a1e, #b8402c 50%, var(--choc) 50%, var(--choc-dark));
+}
+
+.shadow {
+  position: absolute;
+  bottom: 10px;
+  width: 220px;
+  height: 30px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), transparent);
+  pointer-events: none;
+}
+
+/* ---------- links ---------- */
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.9rem;
+}
+
+.link {
+  --brand: #fff;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  color: var(--cream);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  transition: transform 0.2s, background 0.2s, color 0.2s, box-shadow 0.2s;
+}
+.link svg { width: 26px; height: 26px; fill: currentColor; }
+.link:hover, .link:focus-visible {
+  transform: translateY(-4px);
+  background: var(--brand);
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  outline: none;
+}
+.link.tiktok    { --brand: #111; }
+.link.instagram { --brand: linear-gradient(45deg, #f9ce34, #ee2a7b, #6228d7); }
+.link.github    { --brand: #24292f; }
+.link.vk        { --brand: #0077ff; }
+.link.telegram  { --brand: #26a5e4; }
+
+.email-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem 1.6rem;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #d0643f, #9c2f22);
+  box-shadow: 0 8px 24px rgba(156, 47, 34, 0.45);
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.email-btn svg { width: 20px; height: 20px; fill: currentColor; }
+.email-btn:hover, .email-btn:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(156, 47, 34, 0.6);
+  outline: none;
+}
+
+/* ---------- email dialog ---------- */
+
+.email-dialog {
+  width: min(92vw, 440px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  padding: 1.5rem;
+  color: var(--cream);
+  background: #2a1810;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5);
+}
+.email-dialog::backdrop { background: rgba(10, 5, 3, 0.65); backdrop-filter: blur(3px); }
+.email-dialog h2 { margin: 0 0 1rem; }
+.email-dialog label { display: grid; gap: 0.35rem; margin-bottom: 0.9rem; font-size: 0.9rem; }
+.email-dialog input, .email-dialog textarea {
+  font: inherit;
+  color: inherit;
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.25);
+  resize: vertical;
+}
+.email-dialog input:focus, .email-dialog textarea:focus { outline: 2px solid #d0643f; border-color: transparent; }
+.address { font-size: 0.85rem; opacity: 0.75; margin: 0 0 1rem; }
+.address a { color: #f3b48a; }
+.actions { display: flex; justify-content: flex-end; gap: 0.6rem; }
+.actions button {
+  font: inherit;
+  padding: 0.6rem 1.1rem;
+  border-radius: 10px;
+  border: 0;
+  cursor: pointer;
+}
+.ghost { background: transparent; color: var(--cream); border: 1px solid rgba(255, 255, 255, 0.2) !important; }
+.primary { background: #c8553d; color: #fff; font-weight: 600; }
+
+/* ---------- small screens ---------- */
+
+@media (max-width: 560px), (max-height: 760px) {
+  .stage { height: 400px; }
+  .scaler { transform: scale(0.76); }
+  .shadow { bottom: -4px; width: 170px; }
+}
