@@ -1,6 +1,6 @@
 # Sweet Links
 
-A static one-page site with a 3D chocolate bar you can rotate (drag, swipe, arrow keys, or double-click to flip), links to TikTok, Instagram, GitHub, VK and Telegram, and a "Send me an email" form that opens the visitor's mail app.
+A static one-page site with a glowing 3D chocolate bar. The links to TikTok, Instagram, GitHub, VK and Telegram, plus an email piece, are pressed into the bar's pieces: tap a piece to open it, drag or swipe (or use the arrow keys) to turn the bar. When left alone the bar sways gently and turns back to the front. The email piece opens a short form that hands off to the visitor's mail app.
 
 Set your profile URLs and email address in the `CONFIG` block at the top of `script.js`.
 
